@@ -1,4 +1,4 @@
-# 📐 VisualAcad — Plataforma Web de Visualización de Archivos 2D y 3D
+# 📐 GonoS — Plataforma Web de Visualización de Archivos 2D y 3D
 
 > Plataforma web académica que permite a docentes de diseño, arquitectura y matemática visualizar e inspeccionar archivos 2D, vectoriales y 3D directamente desde el navegador, sin descargar archivos ni instalar software especializado.
 
@@ -19,7 +19,7 @@
 
 Los docentes de diseño, arquitectura y matemática enfrentan barreras al corregir trabajos digitales: descargar archivos pesados, instalar software con licencias costosas y recibir representaciones degradadas (modelos 3D convertidos a imágenes estáticas, vectores rasterizados).
 
-**VisualAcad** resuelve esto con una plataforma web que centraliza la entrega, visualización y corrección de trabajos académicos en un solo lugar, manteniendo la fidelidad del archivo original.
+**GonoS** resuelve esto con una plataforma web que centraliza la entrega, visualización y corrección de trabajos académicos en un solo lugar, manteniendo la fidelidad del archivo original.
 
 ---
 
@@ -112,7 +112,7 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 ## 🗂️ Estructura del proyecto
 
 ```
-visualacad/
+GonoS/
 ├── frontend/               # Vue.js 3 + Vite
 │   ├── src/
 │   │   ├── components/     # Componentes reutilizables
