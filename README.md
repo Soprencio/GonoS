@@ -1,4 +1,4 @@
-# 📐 GonoS — Plataforma Web de Visualización de Archivos 2D y 3D
+# GonoS: Plataforma Web de Visualización de Archivos 2D y 3D
 
 > Plataforma web académica que permite a docentes de diseño, arquitectura y matemática visualizar e inspeccionar archivos 2D, vectoriales y 3D directamente desde el navegador, sin descargar archivos ni instalar software especializado.
 
