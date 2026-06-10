@@ -26,10 +26,10 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 ## Funcionalidades
 
 ### Visualización
-- 📦 Modelos 3D (`.obj`, `.stl`) con rotación, zoom y desplazamiento
-- 🎨 Archivos vectoriales (`.svg`) con fidelidad completa sin rasterización
-- 🖼️ Imágenes 2D (`.png`, `.jpg`) con zoom y desplazamiento
-- ⚠️ Soporte `.fbx` condicional (según compatibilidad en producción)
+- Modelos 3D (`.obj`, `.stl`) con rotación, zoom y desplazamiento
+- Archivos vectoriales (`.svg`) con fidelidad completa sin rasterización
+- Imágenes 2D (`.png`, `.jpg`) con zoom y desplazamiento
+- Soporte `.fbx` condicional (según compatibilidad en producción)
 
 ### Organización académica
 - Estructura jerárquica: **Cátedra → Alumno** (Comisión como nivel opcional)
@@ -53,7 +53,7 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 
 ---
 
-## 🚫 Fuera del alcance
+## Fuera del alcance
 
 - Edición de archivos en línea
 - Integración con LMS (Moodle, Google Classroom)
@@ -64,7 +64,7 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 
 ---
 
-## 🧱 Stack Tecnológico
+## Stack Tecnológico
 
 ### Frontend
 | Componente | Tecnología |
@@ -109,7 +109,7 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 
 ---
 
-## 🗂️ Estructura del proyecto
+## Estructura del proyecto
 
 ```
 GonoS/
@@ -137,7 +137,7 @@ GonoS/
 
 ---
 
-## ⚙️ Requisitos del sistema
+## Requisitos del sistema
 
 - **SO compatible:** Windows o Linux (escritorio)
 - **Navegadores soportados:** Chrome 90+, Firefox 88+, Edge 90+
@@ -145,7 +145,7 @@ GonoS/
 
 ---
 
-## 📋 Rendimiento
+## Rendimiento
 
 | Aspecto | Objetivo |
 |---------|----------|
@@ -158,6 +158,6 @@ GonoS/
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Proyecto académico — uso educativo. Todos los derechos reservados al equipo de desarrollo.
