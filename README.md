@@ -2,8 +2,6 @@
 
 > Plataforma web académica que permite a docentes de diseño, arquitectura y matemática visualizar e inspeccionar archivos 2D, vectoriales y 3D directamente desde el navegador, sin descargar archivos ni instalar software especializado.
 
----
-
 ## Equipo
 
 | Nombre | Rol |
@@ -13,15 +11,11 @@
 | **Juan Almaraz** | Backend |
 | **Manuel Ponce** | Backend |
 
----
-
 ## Propósito
 
 Los docentes de diseño, arquitectura y matemática enfrentan barreras al corregir trabajos digitales: descargar archivos pesados, instalar software con licencias costosas y recibir representaciones degradadas (modelos 3D convertidos a imágenes estáticas, vectores rasterizados).
 
 **GonoS** resuelve esto con una plataforma web que centraliza la entrega, visualización y corrección de trabajos académicos en un solo lugar, manteniendo la fidelidad del archivo original.
-
----
 
 ## Funcionalidades
 
@@ -32,7 +26,7 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 - Soporte `.fbx` condicional (según compatibilidad en producción)
 
 ### Organización académica
-- Estructura jerárquica: **Cátedra → Alumno** (Comisión como nivel opcional)
+- Estructura jerárquica: Cátedra → Alumno (Comisión como nivel opcional)
 - Panel de navegación para docentes con acceso en ≤ 3 clics a cualquier trabajo
 - Estados de entrega visibles: `Pendiente / En revisión / Revisado / Aprobado`
 
@@ -47,11 +41,9 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 - Notificaciones internas al recibir feedback o nuevas entregas
 
 ### Autenticación y roles
-- Roles: **Docente**, **Alumno** y **Admin**
+- Roles: Docente, Alumno y Admin
 - Autenticación con JWT + refresh tokens
 - Contraseñas almacenadas con hash bcrypt
-
----
 
 ## Fuera del alcance
 
@@ -61,8 +53,6 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 - Notificaciones por correo electrónico
 - Calificación numérica automática
 - App móvil o soporte para tablets
-
----
 
 ## Stack Tecnológico
 
@@ -107,8 +97,6 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 | Orquestación (futuro) | Docker Swarm / Kubernetes |
 | Monitoreo (futuro) | Prometheus + Grafana |
 
----
-
 ## Estructura del proyecto
 
 ```
@@ -135,15 +123,12 @@ GonoS/
 └── README.md
 ```
 
----
-
 ## Requisitos del sistema
 
-- **SO compatible:** Windows o Linux (escritorio)
-- **Navegadores soportados:** Chrome 90+, Firefox 88+, Edge 90+
+- SO compatible: Windows o Linux (escritorio)
+- Navegadores soportados: Chrome 90+, Firefox 88+, Edge 90+
 - No requiere instalación de plugins ni software adicional
 
----
 
 ## Rendimiento
 
@@ -155,8 +140,6 @@ GonoS/
 | Respuesta de la API | < 500 ms en el 95% de las solicitudes |
 | Disponibilidad | ≥ 99% mensual |
 | Usuarios concurrentes | ≥ 50 sin degradación |
-
----
 
 ## Licencia
 
