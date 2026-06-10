@@ -4,7 +4,7 @@
 
 ---
 
-## 👥 Equipo
+## Equipo
 
 | Nombre | Rol |
 |--------|-----|
@@ -15,7 +15,7 @@
 
 ---
 
-## 🎯 Propósito
+## Propósito
 
 Los docentes de diseño, arquitectura y matemática enfrentan barreras al corregir trabajos digitales: descargar archivos pesados, instalar software con licencias costosas y recibir representaciones degradadas (modelos 3D convertidos a imágenes estáticas, vectores rasterizados).
 
@@ -23,7 +23,7 @@ Los docentes de diseño, arquitectura y matemática enfrentan barreras al correg
 
 ---
 
-## ✅ Funcionalidades
+## Funcionalidades
 
 ### Visualización
 - 📦 Modelos 3D (`.obj`, `.stl`) con rotación, zoom y desplazamiento
