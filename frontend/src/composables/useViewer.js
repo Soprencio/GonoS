@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 
@@ -174,7 +175,7 @@ export function useViewer(canvasRef) {
     return { vertices: verts, triangles: tris }
   }
 
-  async function loadModel(url, format) {
+  async function loadModel(url, format, mtlUrl, extraMap) {
     loading.value = true
     loadError.value = null
     progress.value = 0
@@ -192,6 +193,13 @@ export function useViewer(canvasRef) {
         await loadIFC(url)
         fitModelToView()
         updateModelInfo()
+        return
+      }
+
+      if (format === '.obj' && mtlUrl) {
+        await loadObjWithMtl(url, mtlUrl, extraMap)
+        updateModelInfo()
+        fitModelToView()
         return
       }
 
@@ -240,6 +248,70 @@ export function useViewer(canvasRef) {
     } finally {
       loading.value = false
     }
+  }
+
+  const TEXTURE_EXTS = ['.jpg', '.jpeg', '.png', '.bmp', '.tga', '.tiff']
+
+  function rewriteMtlTextures(text, extraMap) {
+    if (!extraMap) return text
+    return text.split('\n').map(line => {
+      const trimmed = line.trim()
+      const lower = trimmed.toLowerCase()
+      for (const ext of TEXTURE_EXTS) {
+        const idx = lower.indexOf(ext)
+        if (idx === -1) continue
+        let start = idx
+        while (start > 0 && trimmed[start - 1] !== ' ' && trimmed[start - 1] !== '\t') start--
+        const fullName = trimmed.substring(start, idx + ext.length)
+        const bareName = fullName.split(/[\\/]/).pop().trim()
+        const blobUrl = extraMap[bareName]
+        if (!blobUrl) continue
+        return trimmed.substring(0, start) + blobUrl
+      }
+      return line
+    }).join('\n')
+  }
+
+  async function loadObjWithMtl(objUrl, mtlUrl, extraMap) {
+    console.log('[MTL] extraMap keys:', Object.keys(extraMap))
+    const mtlText = await fetch(mtlUrl).then(r => r.text())
+    console.log('[MTL] Original:\n', mtlText)
+    const rewritten = rewriteMtlTextures(mtlText, extraMap)
+    console.log('[MTL] Rewritten:\n', rewritten)
+    const mtlBlob = new Blob([rewritten], { type: 'text/plain' })
+    const mtlObjUrl = URL.createObjectURL(mtlBlob)
+
+    const objLoader = new OBJLoader()
+    const mtlLoader = new MTLLoader()
+
+    const materials = await new Promise((resolve) => {
+      mtlLoader.load(mtlObjUrl, resolve, undefined, () => resolve(null))
+    })
+
+    URL.revokeObjectURL(mtlObjUrl)
+
+    if (materials) {
+      console.log('[MTL] Materiales creados:', Object.keys(materials.materialsInfo))
+      materials.baseUrl = ''
+      objLoader.setMaterials(materials)
+    } else {
+      console.warn('[MTL] Falló la carga del MTL')
+    }
+
+    const group = await loadWithLoader(objLoader, objUrl)
+
+    if (!materials) {
+      console.warn('[Viewer] Falló MTL, usando material gris')
+      const fallbackMat = new THREE.MeshStandardMaterial({ color: 0xCCCCCC })
+      group.traverse(child => {
+        if (child.isMesh) {
+          child.material = fallbackMat
+        }
+      })
+    }
+
+    group.name = 'Modelo OBJ'
+    modelGroup.add(group)
   }
 
   function updateModelInfo() {

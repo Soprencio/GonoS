@@ -19,6 +19,8 @@ const entrega = ref(null)
 const loading = ref(true)
 const error = ref('')
 const blobUrl = ref('')
+const mtlUrl = ref('')
+const extraMap = ref({})
 const viewerRef = ref(null)
 const hierarchy = ref([])
 const selectedId = ref('')
@@ -207,8 +209,26 @@ onMounted(async () => {
   try {
     const res = await api.get(`/entregas/${route.params.id}`)
     entrega.value = res.data
+
+    const extras = res.data.archivos_extra || []
+    const map = {}
+    for (const ex of extras) {
+      try {
+        const r = await api.get(`/entregas/${route.params.id}/archivos/${ex.id}`, { responseType: 'blob' })
+        const bUrl = URL.createObjectURL(r.data)
+        map[ex.nombre_original] = bUrl
+        if (ex.nombre_original.toLowerCase().endsWith('.mtl')) {
+          mtlUrl.value = bUrl
+        }
+      } catch (e) {
+        console.warn('No se pudo descargar archivo extra:', ex.nombre_original, e)
+      }
+    }
+    extraMap.value = map
+
     const blobRes = await api.get(`/entregas/${route.params.id}/descargar`, { responseType: 'blob' })
     blobUrl.value = URL.createObjectURL(blobRes.data)
+
     await fetchComentarios()
   } catch (err) {
     if (err.response?.status === 403 || err.response?.status === 404) {
@@ -223,6 +243,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  for (const bUrl of Object.values(extraMap.value)) {
+    URL.revokeObjectURL(bUrl)
+  }
+  if (blobUrl.value) URL.revokeObjectURL(blobUrl.value)
 })
 </script>
 
@@ -282,6 +306,8 @@ onUnmounted(() => {
             ref="viewerRef"
             :src="blobUrl"
             :format="getExtension(entrega.nombre_original)"
+            :mtlUrl="mtlUrl"
+            :extraMap="extraMap"
             :annotating="annotating"
             @load="is3DReady = true; hierarchy = viewerRef?.extractHierarchy?.() || []"
             @select="onCanvasSelect"

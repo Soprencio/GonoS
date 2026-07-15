@@ -115,6 +115,16 @@ CREATE TABLE entrega (
   CONSTRAINT fk_entrega_asignacion FOREIGN KEY (asignacion_id) REFERENCES asignacion(asignacion_id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE archivo_extra (
+  archivo_extra_id  INT UNSIGNED AUTO_INCREMENT,
+  entrega_id        INT UNSIGNED NOT NULL,
+  nombre            VARCHAR(255) NOT NULL,
+  nombre_original   VARCHAR(255) NOT NULL,
+  created_at        DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (archivo_extra_id),
+  CONSTRAINT fk_archivo_extra_entrega FOREIGN KEY (entrega_id) REFERENCES entrega(entrega_id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE comentario_priv (
   com_priv_id      INT UNSIGNED AUTO_INCREMENT,
   entrega_id       INT UNSIGNED NOT NULL,

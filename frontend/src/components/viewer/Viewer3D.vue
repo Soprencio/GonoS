@@ -5,6 +5,8 @@ import { useViewer } from '../../composables/useViewer.js'
 const props = defineProps({
   src: { type: String, default: '' },
   format: { type: String, default: '' },
+  mtlUrl: { type: String, default: '' },
+  extraMap: { type: Object, default: () => ({}) },
   annotating: { type: Boolean, default: false }
 })
 
@@ -40,8 +42,9 @@ function onClick(event) {
 async function load() {
   if (!props.src || !props.format) return
   hasError.value = false
+  console.log('[Viewer3D] load:', { format: props.format, mtlUrl: !!props.mtlUrl, extraKeys: Object.keys(props.extraMap) })
   try {
-    await viewer.loadModel(props.src, props.format)
+    await viewer.loadModel(props.src, props.format, props.mtlUrl || undefined, props.extraMap || undefined)
     emit('load')
   } catch {
     hasError.value = true

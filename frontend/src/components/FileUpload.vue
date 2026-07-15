@@ -10,6 +10,10 @@ const props = defineProps({
   url: {
     type: String,
     required: true
+  },
+  extraFiles: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -72,6 +76,9 @@ async function submit() {
 
   const formData = new FormData()
   formData.append('archivo', file.value)
+  for (const ef of props.extraFiles) {
+    formData.append('archivos_extra', ef)
+  }
 
   try {
     await api.post(props.url, formData, {
@@ -98,6 +105,8 @@ function resetFile() {
   errorMsg.value = ''
   progress.value = 0
 }
+
+defineExpose({ submit })
 </script>
 
 <template>
