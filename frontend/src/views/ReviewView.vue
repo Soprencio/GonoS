@@ -6,7 +6,6 @@ import Viewer3D from '../components/viewer/Viewer3D.vue'
 import ElementTree from '../components/viewer/ElementTree.vue'
 import ElementInfo from '../components/viewer/ElementInfo.vue'
 import AnnotationPin from '../components/viewer/AnnotationPin.vue'
-import AnnotationForm from '../components/viewer/AnnotationForm.vue'
 import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
 
 const ESTADOS = ['Pendiente', 'En revisión', 'Revisado', 'Aprobado']
@@ -31,10 +30,7 @@ const comentariosLoading = ref(false)
 const activeCommentId = ref(null)
 
 const annotating = ref(false)
-const formPosition = ref(null)
-const formScreenPos = ref(null)
-const formError = ref('')
-const showForm = ref(false)
+const pendingPin = ref(null)
 
 function getExtension(name) {
   if (!name) return ''
@@ -118,46 +114,31 @@ async function handleEstadoChange(event) {
 
 function toggleAnnotating() {
   annotating.value = !annotating.value
-  showForm.value = false
-  formPosition.value = null
-  formScreenPos.value = null
-  formError.value = ''
-}
-
-function startGeneralComment() {
-  formPosition.value = null
-  formScreenPos.value = null
-  formError.value = ''
-  showForm.value = true
 }
 
 function onAnnotatePoint({ worldPos, screenPos }) {
-  formPosition.value = worldPos
-  formScreenPos.value = screenPos
-  formError.value = ''
-  showForm.value = true
+  pendingPin.value = { worldPos, screenPos, texto: '', saving: false, error: '' }
+  rightTab.value = 'comentarios'
 }
 
-async function saveComment(texto) {
-  formError.value = ''
+async function savePendingPin() {
+  const pin = pendingPin.value
+  if (!pin || !pin.texto.trim() || pin.saving) return
+  pin.saving = true
+  pin.error = ''
   try {
-    const payload = { texto }
-    if (formPosition.value) payload.posicion = formPosition.value
+    const payload = { texto: pin.texto.trim(), posicion: pin.worldPos }
     await api.post(`/entregas/${route.params.id}/comentarios`, payload)
-    showForm.value = false
-    formPosition.value = null
-    formScreenPos.value = null
+    pendingPin.value = null
     await fetchComentarios()
   } catch (err) {
-    formError.value = err.response?.data?.error || 'Error al guardar'
+    pin.error = err.response?.data?.error || 'Error al guardar'
+    pin.saving = false
   }
 }
 
-function cancelForm() {
-  showForm.value = false
-  formPosition.value = null
-  formScreenPos.value = null
-  formError.value = ''
+function cancelPendingPin() {
+  pendingPin.value = null
 }
 
 async function deleteComment(id) {
@@ -198,9 +179,18 @@ const commentsWithPin = computed(() =>
   comentarios.value.filter(c => c.posicion)
 )
 
+function pinStyle(worldPos) {
+  if (!viewerRef.value?.projectToScreen) return { display: 'none' }
+  const screen = viewerRef.value.projectToScreen(worldPos)
+  if (screen && screen.z <= 1) {
+    return { left: `${screen.x}px`, top: `${screen.y}px`, display: 'block' }
+  }
+  return { display: 'none' }
+}
+
 function handleKeydown(e) {
-  if (e.key === 'Escape' && showForm.value) {
-    cancelForm()
+  if (e.key === 'Escape' && pendingPin.value && !pendingPin.value.texto.trim()) {
+    cancelPendingPin()
   }
 }
 
@@ -284,13 +274,7 @@ onUnmounted(() => {
           >
             {{ annotating ? 'Cancelar anotación' : 'Agregar anotación' }}
           </button>
-          <button
-            v-if="isProfesor && annotating"
-            class="secondary"
-            @click="startGeneralComment"
-          >
-            Comentario general
-          </button>
+          <span v-if="isProfesor && annotating" class="hint-btn">Hacé clic en el modelo para colocar un pin</span>
         </div>
       </header>
 
@@ -327,6 +311,13 @@ onUnmounted(() => {
                   :active="activeCommentId === c.com_priv_id"
                   @click="onPinClick(c.com_priv_id)"
                 />
+                <div
+                  v-if="pendingPin"
+                  class="pin-pending"
+                  :style="pinStyle(pendingPin.worldPos)"
+                >
+                  <div class="pin-pending-dot"></div>
+                </div>
               </div>
             </template>
           </Viewer3D>
@@ -365,6 +356,29 @@ onUnmounted(() => {
           </div>
 
           <div class="annotations-section" :class="{ full: !(is3DFormat && rightTab === 'propiedades') }">
+            <div v-if="pendingPin" class="pending-section">
+              <div class="pending-header">Nuevo pin</div>
+              <div class="pending-card">
+                <div class="pin-coords">
+                  X: {{ pendingPin.worldPos.x.toFixed(3) }} &nbsp; Y: {{ pendingPin.worldPos.y.toFixed(3) }} &nbsp; Z: {{ pendingPin.worldPos.z.toFixed(3) }}
+                </div>
+                <textarea
+                  v-model="pendingPin.texto"
+                  class="pending-textarea"
+                  placeholder="Escribí tu comentario..."
+                  maxlength="2000"
+                  rows="3"
+                ></textarea>
+                <p v-if="pendingPin.error" class="error-msg">{{ pendingPin.error }}</p>
+                <div class="pending-actions">
+                  <button class="primary small" :disabled="!pendingPin.texto.trim() || pendingPin.saving" @click="savePendingPin()">
+                    {{ pendingPin.saving ? 'Guardando...' : 'Guardar' }}
+                  </button>
+                  <button class="secondary small" @click="cancelPendingPin()">Descartar</button>
+                </div>
+              </div>
+            </div>
+
             <div v-if="comentariosLoading" class="loading-msg">Cargando comentarios...</div>
             <AnnotationPanel
               v-else
@@ -387,13 +401,6 @@ onUnmounted(() => {
         >{{ tab.label }}</button>
       </div>
 
-      <AnnotationForm
-        v-if="showForm"
-        :screenPos="formScreenPos"
-        :error="formError"
-        @save="saveComment"
-        @cancel="cancelForm"
-      />
     </template>
   </div>
 </template>
@@ -631,4 +638,81 @@ onUnmounted(() => {
 }
 
 .error { color: var(--color-danger); }
+
+.hint-btn {
+  font-size: 0.78rem;
+  color: var(--color-accent);
+  font-style: italic;
+}
+
+.pending-section {
+  border-bottom: 1px solid var(--color-border);
+  max-height: 40%;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.pending-header {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-accent);
+  padding: 10px 12px 6px;
+  font-weight: 600;
+}
+
+.pending-card {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-accent-soft);
+}
+
+.pending-card:last-child { border-bottom: none; }
+
+.pin-coords {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  font-family: monospace;
+  margin-bottom: 6px;
+}
+
+.pending-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.pending-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+button.small {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+}
+
+.pin-pending {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 22;
+  pointer-events: none;
+}
+
+.pin-pending-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ff6600;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
 </style>
