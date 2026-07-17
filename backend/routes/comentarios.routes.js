@@ -122,7 +122,8 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
 
     const [comentarios] = await pool.execute(
       `SELECT c.com_priv_id, c.comentario, c.fecha,
-              p.posicion_x, p.posicion_y, p.posicion_z
+              p.posicion_x, p.posicion_y, p.posicion_z,
+              u.nombre AS profe_nombre, u.apellido AS profe_apellido
        FROM comentario_priv c
        LEFT JOIN (
          SELECT com_priv_id,
@@ -132,6 +133,8 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
          FROM posiciones
          GROUP BY com_priv_id
        ) p ON c.com_priv_id = p.com_priv_id
+       JOIN participaciones pp ON c.participacion_id = pp.participacion_id
+       JOIN usuarios u ON pp.usuario_id = u.usuario_id
        WHERE c.entrega_id = ?
        ORDER BY c.fecha ASC`,
       [req.params.entregaId]
@@ -143,7 +146,10 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
       fecha: c.fecha,
       posicion: c.posicion_x != null
         ? { x: c.posicion_x, y: c.posicion_y, z: c.posicion_z }
-        : null
+        : null,
+      profesor: c.profe_nombre
+        ? `${c.profe_nombre} ${c.profe_apellido}`
+        : 'Profesor'
     }));
 
     res.json(result);

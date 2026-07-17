@@ -63,6 +63,12 @@ async function descargar() {
         {{ entrega.estado }}
       </span>
       <span v-if="entrega.devolucion" class="devolucion">{{ entrega.devolucion }}</span>
+      <span v-if="entrega.nota != null && entrega.nota > 0" class="nota-badge">
+        Nota: {{ entrega.nota }}
+        <span :class="entrega.nota >= 6 ? 'nota-aprobado' : 'nota-desaprobado'">
+          ({{ entrega.nota >= 6 ? 'Aprobado' : 'Desaprobado' }})
+        </span>
+      </span>
     </td>
     <td class="cell actions">
       <button class="primary" @click="router.push(`/entrega/${entrega.entrega_id}/revisar`)" title="Revisar entrega">Revisar</button>
@@ -129,6 +135,22 @@ async function descargar() {
 .devolucion {
   font-size: 0.75rem;
   color: var(--color-danger);
+}
+
+.nota-badge {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.nota-aprobado {
+  color: var(--color-success, #2e7d32);
+  font-weight: 600;
+}
+
+.nota-desaprobado {
+  color: var(--color-danger);
+  font-weight: 600;
 }
 
 .actions {

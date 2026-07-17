@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useViewer } from '../../composables/useViewer.js'
+import ViewCube from './ViewCube.vue'
 
 const props = defineProps({
   src: { type: String, default: '' },
@@ -84,6 +85,9 @@ defineExpose({
         title="Aislar pieza seleccionada"
       >Aislar</button>
       <button class="secondary" @click="viewer.showAll()" title="Mostrar todo">Mostrar todo</button>
+      <button class="secondary" @click="viewer.toggleCamera()" title="Alternar vista perspectiva/ortogonal">
+        {{ viewer.cameraType.value === 'perspective' ? 'Flat' : 'Persp' }}
+      </button>
     </div>
 
     <div ref="wrapperRef" class="canvas-wrapper">
@@ -94,6 +98,8 @@ defineExpose({
         :style="{ cursor: cursorStyle }"
         @click="onClick"
       />
+
+      <ViewCube v-if="viewer.modelInfo.value.name && !viewer.loading.value" :viewer="viewer" />
 
       <slot name="overlay"></slot>
 
@@ -146,6 +152,10 @@ defineExpose({
   position: relative;
   min-height: 0;
   overflow: hidden;
+}
+
+.canvas-wrapper canvas {
+  pointer-events: auto;
 }
 
 .viewer-canvas {

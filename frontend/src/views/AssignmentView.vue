@@ -91,7 +91,7 @@ onMounted(async () => {
         <!-- Alumno -->
         <div v-if="trabajo.rol === 'Alumno'" class="actions">
           <button
-            v-if="trabajo.asignacion?.estado === 'Pendiente'"
+            v-if="!trabajo.asignacion?.entrega_id"
             class="primary"
             @click="router.push(`/trabajo/${route.params.id}/nueva-entrega`)"
           >
@@ -100,13 +100,18 @@ onMounted(async () => {
           <button
             v-else
             class="secondary"
-            @click="router.push(`/trabajo/${route.params.id}/nueva-entrega`)"
+            @click="router.push(`/entrega/${trabajo.asignacion.entrega_id}/revisar`)"
           >
-            {{ trabajo.asignacion?.estado === 'En revisión' ? 'Ver mi entrega' : 'Ver mi entrega' }}
+            Ver mi entrega
           </button>
           <p class="estado-info">
             Estado: <strong>{{ trabajo.asignacion?.estado || 'Sin estado' }}</strong>
-            <span v-if="trabajo.asignacion?.nota != null"> — Nota: {{ trabajo.asignacion.nota }}</span>
+            <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0">
+              — Nota: {{ trabajo.asignacion.nota }}
+              <span :class="trabajo.asignacion.nota >= 6 ? 'aprobado' : 'desaprobado'">
+                ({{ trabajo.asignacion.nota >= 6 ? 'Aprobado' : 'Desaprobado' }})
+              </span>
+            </span>
           </p>
         </div>
 
@@ -271,6 +276,16 @@ onMounted(async () => {
 
 .entregas-table th:last-child {
   text-align: right;
+}
+
+.aprobado {
+  color: var(--color-success, #2e7d32);
+  font-weight: 600;
+}
+
+.desaprobado {
+  color: var(--color-danger);
+  font-weight: 600;
 }
 
 .state-msg {

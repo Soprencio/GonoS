@@ -359,4 +359,50 @@ router.get('/entregas/:id/archivos/:archivoExtraId', requireAuth, async (req, re
   }
 });
 
+// ── PATCH /api/entregas/:id/nota — guardar nota (solo Profesor)
+router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
+  const { nota } = req.body;
+
+  if (nota === undefined || nota === null || isNaN(nota)) {
+    return res.status(400).json({ error: 'La nota es obligatoria y debe ser un número' });
+  }
+
+  const notaNum = parseFloat(nota);
+  if (notaNum < 0 || notaNum > 10) {
+    return res.status(400).json({ error: 'La nota debe estar entre 0 y 10' });
+  }
+
+  try {
+    const [entregas] = await pool.execute(
+      `SELECT e.entrega_id, e.asignacion_id, t.clase_id
+       FROM entrega e
+       JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+       JOIN trabajos t ON a.tp_id = t.tp_id
+       WHERE e.entrega_id = ?`,
+      [req.params.id]
+    );
+
+    if (entregas.length === 0) {
+      return res.status(404).json({ error: 'Entrega no encontrada' });
+    }
+
+    const participacion = await getParticipacion(req.user.id, entregas[0].clase_id);
+    if (!participacion || participacion.rol !== 'Profesor') {
+      return res.status(403).json({ error: 'Solo el profesor puede calificar' });
+    }
+
+    const estadoFinal = notaNum >= 6 ? 'Aprobado' : 'Revisado';
+
+    await pool.execute(
+      'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+      [notaNum, estadoFinal, entregas[0].asignacion_id]
+    );
+
+    res.json({ mensaje: 'Nota guardada', nota: notaNum, estado: estadoFinal });
+  } catch (err) {
+    console.error('Error al guardar nota:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 module.exports = router;

@@ -13,8 +13,9 @@ export function useViewer(canvasRef) {
   const progress = ref(0)
   const selectedObject = ref(null)
   const modelInfo = ref({ name: '', type: '', vertices: 0, triangles: 0 })
+  const cameraType = ref('perspective')
 
-  let renderer, scene, camera, controls
+  let renderer, scene, camera, controls, orthoCamera, perspCamera
   let animationId
   let modelGroup = new THREE.Group()
   let thatOpenComponents = null
@@ -22,6 +23,7 @@ export function useViewer(canvasRef) {
   let hiddenObjects = []
   let currentFormat = ''
   const frameCallbacks = []
+  const viewChangeCallbacks = []
 
   function detectWebGL() {
     const canvas = document.createElement('canvas')
@@ -57,13 +59,31 @@ export function useViewer(canvasRef) {
     scene.add(modelGroup)
 
     const aspect = width / height
-    camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000)
-    camera.position.set(4, 3, 5)
+
+    perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000)
+    perspCamera.position.set(4, 3, 5)
+
+    const initialDist = 5
+    const frustum = initialDist * 0.5
+    orthoCamera = new THREE.OrthographicCamera(
+      -frustum * aspect, frustum * aspect,
+      frustum, -frustum,
+      0.1, 1000
+    )
+    orthoCamera.position.copy(perspCamera.position)
+    orthoCamera.quaternion.copy(perspCamera.quaternion)
+    orthoCamera.updateProjectionMatrix()
+
+    camera = perspCamera
 
     controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.12
     controls.target.set(0, 0, 0)
+
+    controls.addEventListener('change', () => {
+      for (const cb of viewChangeCallbacks) cb()
+    })
     controls.update()
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.6)
@@ -81,13 +101,103 @@ export function useViewer(canvasRef) {
     return true
   }
 
+  function toggleCamera() {
+    if (!renderer) return
+    const isPersp = camera === perspCamera
+    const from = camera
+    const to = isPersp ? orthoCamera : perspCamera
+
+    to.position.copy(from.position)
+    to.quaternion.copy(from.quaternion)
+
+    if (to === orthoCamera) {
+      const dist = from.position.distanceTo(controls.target)
+      const aspect = renderer.domElement.width / renderer.domElement.height
+      const f = dist * 0.5
+      to.left = -f * aspect
+      to.right = f * aspect
+      to.top = f
+      to.bottom = -f
+      to.updateProjectionMatrix()
+    }
+
+    controls.object = to
+    camera = to
+    controls.update()
+    cameraType.value = isPersp ? 'orthographic' : 'perspective'
+    for (const cb of viewChangeCallbacks) cb()
+  }
+
+  function getCamera() { return camera }
+  function getControls() { return controls }
+  function onViewChange(cb) {
+    viewChangeCallbacks.push(cb)
+    return () => {
+      const i = viewChangeCallbacks.indexOf(cb)
+      if (i >= 0) viewChangeCallbacks.splice(i, 1)
+    }
+  }
+
+  let animTargetPos = null
+  let animTargetQuat = null
+  let animProgress = 0
+  const ANIM_DURATION = 20
+
+  function setViewDirection(dir) {
+    const target = controls.target
+    const box = new THREE.Box3().setFromObject(modelGroup)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z, 1)
+    const distance = maxDim * 1.8
+
+    const direction = new THREE.Vector3(dir.x, dir.y, dir.z).normalize()
+    const targetPos = target.clone().add(direction.multiplyScalar(distance))
+
+    animTargetPos = targetPos
+    animTargetQuat = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().lookAt(targetPos, target, new THREE.Vector3(0, 1, 0))
+    )
+    animProgress = 0
+  }
+
+  function updateCameraAnimation() {
+    if (!animTargetPos) return
+    animProgress++
+    const t = Math.min(animProgress / ANIM_DURATION, 1)
+    const ease = 1 - Math.pow(1 - t, 3)
+
+    camera.position.lerp(animTargetPos, ease)
+    camera.quaternion.slerp(animTargetQuat, ease)
+    controls.update()
+
+    if (t >= 1) {
+      camera.position.copy(animTargetPos)
+      camera.quaternion.copy(animTargetQuat)
+      controls.update()
+      animTargetPos = null
+      animTargetQuat = null
+      for (const cb of viewChangeCallbacks) cb()
+    }
+  }
+
   function animate() {
     animationId = requestAnimationFrame(animate)
     controls.update()
-    for (const cb of frameCallbacks) cb()
+    updateCameraAnimation()
     if (renderer && scene && camera) {
+      if (camera === orthoCamera) {
+        const dist = camera.position.distanceTo(controls.target)
+        const aspect = renderer.domElement.width / renderer.domElement.height
+        const f = dist * 0.5
+        camera.left = -f * aspect
+        camera.right = f * aspect
+        camera.top = f
+        camera.bottom = -f
+        camera.updateProjectionMatrix()
+      }
       renderer.render(scene, camera)
     }
+    for (const cb of frameCallbacks) cb()
   }
 
   function clearModel() {
@@ -224,7 +334,12 @@ export function useViewer(canvasRef) {
 
       const object = await loadWithLoader(loader, url)
 
-      if (format === '.gltf' || format === '.glb') {
+      if (format === '.stl') {
+        const mat = new THREE.MeshStandardMaterial({ color: 0xbbbbbb, roughness: 0.6, metalness: 0.1 })
+        const mesh = new THREE.Mesh(object, mat)
+        mesh.name = 'Modelo.stl'
+        modelGroup.add(mesh)
+      } else if (format === '.gltf' || format === '.glb') {
         const scene2 = object.scene || object
         scene2.name = scene2.name || 'Modelo GLTF'
         modelGroup.add(scene2)
@@ -443,6 +558,11 @@ export function useViewer(canvasRef) {
     camera.position.set(center.x + dist * 0.6, center.y + dist * 0.5, center.z + dist)
     controls.target.copy(center)
     controls.update()
+
+    if (orthoCamera) {
+      orthoCamera.position.copy(camera.position)
+      orthoCamera.quaternion.copy(camera.quaternion)
+    }
   }
 
   function resetCamera() {
@@ -541,6 +661,12 @@ export function useViewer(canvasRef) {
     registerFrameCallback,
     projectToScreen,
     focusOnPoint,
-    getCanvasRect
+    getCanvasRect,
+    getCamera,
+    getControls,
+    onViewChange,
+    toggleCamera,
+    setViewDirection,
+    cameraType
   }
 }

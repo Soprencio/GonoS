@@ -8,8 +8,6 @@ import ElementInfo from '../components/viewer/ElementInfo.vue'
 import AnnotationPin from '../components/viewer/AnnotationPin.vue'
 import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
 
-const ESTADOS = ['Pendiente', 'En revisión', 'Revisado', 'Aprobado']
-
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
@@ -31,6 +29,9 @@ const activeCommentId = ref(null)
 
 const annotating = ref(false)
 const pendingPin = ref(null)
+
+const notaInput = ref('')
+const savingNota = ref(false)
 
 function getExtension(name) {
   if (!name) return ''
@@ -102,13 +103,23 @@ async function fetchComentarios() {
   }
 }
 
-async function handleEstadoChange(event) {
-  const nuevo = event.target.value
+async function saveNota() {
+  const nota = parseFloat(notaInput.value)
+  if (isNaN(nota) || nota < 0 || nota > 10) {
+    alert('La nota debe ser un número entre 0 y 10')
+    return
+  }
+  savingNota.value = true
   try {
-    await api.patch(`/entregas/${route.params.id}/estado`, { estado: nuevo })
-    if (entrega.value) entrega.value.estado = nuevo
+    const res = await api.patch(`/entregas/${route.params.id}/nota`, { nota })
+    if (entrega.value) {
+      entrega.value.nota = res.data.nota
+      entrega.value.estado = res.data.estado
+    }
   } catch (err) {
-    if (err.response?.data?.error) alert(err.response.data.error)
+    alert(err.response?.data?.error || 'Error al guardar la nota')
+  } finally {
+    savingNota.value = false
   }
 }
 
@@ -199,6 +210,7 @@ onMounted(async () => {
   try {
     const res = await api.get(`/entregas/${route.params.id}`)
     entrega.value = res.data
+    notaInput.value = res.data.nota != null ? String(res.data.nota) : ''
 
     const extras = res.data.archivos_extra || []
     const map = {}
@@ -257,15 +269,30 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="header-right">
-          <select
-            v-if="isProfesor"
-            class="estado-select"
-            :value="entrega.estado"
-            @change="handleEstadoChange"
-          >
-            <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
-          </select>
-          <span v-else class="estado-badge">{{ entrega.estado }}</span>
+          <div v-if="isProfesor" class="nota-section">
+            <label class="nota-label">Nota</label>
+            <input
+              v-model="notaInput"
+              type="number"
+              min="0"
+              max="10"
+              step="0.5"
+              class="nota-input"
+              placeholder="0-10"
+            />
+            <button class="primary small" :disabled="savingNota" @click="saveNota">
+              {{ savingNota ? 'Guardando...' : 'Confirmar nota' }}
+            </button>
+          </div>
+          <div v-else class="nota-display">
+            <span class="estado-badge">{{ entrega.estado }}</span>
+            <span v-if="entrega.nota != null && entrega.nota > 0" class="nota-value">
+              Nota: {{ entrega.nota }}
+              <span :class="entrega.nota >= 6 ? 'aprobado' : 'desaprobado'">
+                ({{ entrega.nota >= 6 ? 'Aprobado' : 'Desaprobado' }})
+              </span>
+            </span>
+          </div>
           <button
             v-if="isProfesor && is3DFormat"
             class="secondary"
@@ -384,6 +411,7 @@ onUnmounted(() => {
               v-else
               :comentarios="comentarios"
               :readonly="!isProfesor"
+              :activeId="activeCommentId"
               @ver-en-modelo="viewOnModel"
               @eliminar="deleteComment"
             />
@@ -457,22 +485,61 @@ onUnmounted(() => {
 
 .tardia { color: var(--color-danger); }
 
-.estado-select {
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-
 .estado-badge {
   font-size: 0.82rem;
   padding: 4px 10px;
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
+}
+
+.nota-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nota-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.nota-input {
+  width: 60px;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.nota-input::-webkit-inner-spin-button {
+  opacity: 1;
+}
+
+.nota-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nota-value {
+  font-size: 0.82rem;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.aprobado {
+  color: var(--color-success, #2e7d32);
+  font-weight: 600;
+}
+
+.desaprobado {
+  color: var(--color-danger);
+  font-weight: 600;
 }
 
 .header-right .secondary.active {

@@ -17,6 +17,30 @@ async function getParticipacion(usuarioId, claseId) {
   return rows[0] || null;
 }
 
+// GET /api/clases/:claseId/alumnos — listar alumnos de una clase (solo Profesor)
+router.get('/clases/:claseId/alumnos', requireAuth, async (req, res) => {
+  const participacion = await getParticipacion(req.user.id, req.params.claseId);
+  if (!participacion || participacion.rol !== 'Profesor') {
+    return res.status(403).json({ error: 'Solo el profesor puede ver los alumnos' });
+  }
+
+  try {
+    const [alumnos] = await pool.execute(
+      `SELECT p.participacion_id, u.usuario_id, u.nombre, u.apellido, u.mail
+       FROM participaciones p
+       JOIN usuarios u ON p.usuario_id = u.usuario_id
+       JOIN roles r ON p.rol_id = r.rol_id
+       WHERE p.clase_id = ? AND r.nombre = 'Alumno'
+       ORDER BY u.apellido, u.nombre`,
+      [req.params.claseId]
+    );
+    res.json(alumnos);
+  } catch (err) {
+    console.error('Error al listar alumnos:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 // POST /api/clases/:claseId/trabajos — crear trabajo (solo Profesor)
 router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
   const participacion = await getParticipacion(req.user.id, req.params.claseId);
@@ -24,7 +48,7 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Solo el profesor puede crear trabajos en esta clase' });
   }
 
-  const { descripcion, fecha_entrega, formatos_aceptados } = req.body;
+  const { descripcion, fecha_entrega, formatos_aceptados, alumnos_ids } = req.body;
 
   if (!descripcion || !descripcion.trim()) {
     return res.status(400).json({ error: 'La descripción del trabajo es obligatoria' });
@@ -45,6 +69,9 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
   if (!Array.isArray(formatos_aceptados) || formatos_aceptados.length === 0) {
     return res.status(400).json({ error: 'Debe especificar al menos un formato aceptado' });
   }
+  if (!Array.isArray(alumnos_ids) || alumnos_ids.length === 0) {
+    return res.status(400).json({ error: 'Debe seleccionar al menos un alumno' });
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -57,19 +84,10 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
       [req.params.claseId, participacion.participacion_id, descSaneada, fecha, JSON.stringify(formatos_aceptados)]
     );
 
-    // Crear asignaciones para todos los alumnos de la clase
-    const [alumnos] = await conn.execute(
-      `SELECT p.participacion_id
-       FROM participaciones p
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.clase_id = ? AND r.nombre = 'Alumno'`,
-      [req.params.claseId]
-    );
-
-    for (const alumno of alumnos) {
+    for (const participacionId of alumnos_ids) {
       await conn.execute(
         'INSERT INTO asignacion (tp_id, participacion_id) VALUES (?, ?)',
-        [tpResult.insertId, alumno.participacion_id]
+        [tpResult.insertId, participacionId]
       );
     }
 
@@ -81,7 +99,7 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
       descripcion: descSaneada,
       fecha_entrega: fecha,
       formatos_aceptados,
-      alumnos_asignados: alumnos.length
+      alumnos_asignados: alumnos_ids.length
     });
   } catch (err) {
     await conn.rollback();
@@ -172,7 +190,10 @@ router.get('/trabajos/:id', requireAuth, async (req, res) => {
 
     if (participacion.rol === 'Alumno') {
       const [asig] = await pool.execute(
-        'SELECT asignacion_id, estado, nota FROM asignacion WHERE tp_id = ? AND participacion_id = ?',
+        `SELECT a.asignacion_id, a.estado, a.nota,
+                (SELECT e.entrega_id FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS entrega_id
+         FROM asignacion a
+         WHERE a.tp_id = ? AND a.participacion_id = ?`,
         [req.params.id, participacion.participacion_id]
       );
       result.asignacion = asig[0] || null;
