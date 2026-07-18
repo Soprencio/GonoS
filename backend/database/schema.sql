@@ -146,6 +146,28 @@ CREATE TABLE posiciones (
   CONSTRAINT fk_pos_teje   FOREIGN KEY (teje_id)     REFERENCES tipos_ejes(teje_id)          ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE comentario_publico (
+  comentario_publico_id INT UNSIGNED AUTO_INCREMENT,
+  tp_id                 INT UNSIGNED NOT NULL,
+  participacion_id      INT UNSIGNED NOT NULL,
+  mensaje               TEXT NOT NULL,
+  created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (comentario_publico_id),
+  CONSTRAINT fk_cpub_tp             FOREIGN KEY (tp_id)            REFERENCES trabajos(tp_id)           ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_cpub_participacion  FOREIGN KEY (participacion_id) REFERENCES participaciones(participacion_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE publicaciones (
+  publicacion_id   INT UNSIGNED AUTO_INCREMENT,
+  clase_id         INT UNSIGNED NOT NULL,
+  participacion_id INT UNSIGNED NOT NULL,
+  mensaje          TEXT NOT NULL,
+  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (publicacion_id),
+  CONSTRAINT fk_pub_clase          FOREIGN KEY (clase_id)         REFERENCES clases(clase_id)             ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_pub_participacion  FOREIGN KEY (participacion_id) REFERENCES participaciones(participacion_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- =============================================================================
 -- SEED: CATÁLOGOS FIJOS
 -- =============================================================================

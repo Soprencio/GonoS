@@ -38,7 +38,11 @@ function getExtension(name) {
   return '.' + name.split('.').pop().toLowerCase()
 }
 
-const isProfesor = computed(() => entrega.value?.rol === 'Profesor')
+const isProfesor = computed(() =>
+  entrega.value?.rol === 'Profesor' || entrega.value?.rol === 'Creador'
+)
+
+const puedeCalificar = computed(() => !!entrega.value?.puedeCalificar)
 
 const is3DFormat = computed(() => {
   if (!entrega.value) return false
@@ -269,7 +273,7 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="header-right">
-          <div v-if="isProfesor" class="nota-section">
+          <div v-if="puedeCalificar" class="nota-section">
             <label class="nota-label">Nota</label>
             <input
               v-model="notaInput"
@@ -336,7 +340,9 @@ onUnmounted(() => {
                   :projectFn="viewerRef.projectToScreen"
                   :registerFrameFn="viewerRef.registerFrameCallback"
                   :active="activeCommentId === c.com_priv_id"
+                  :comentario="c"
                   @click="onPinClick(c.com_priv_id)"
+                  @close="activeCommentId = null"
                 />
                 <div
                   v-if="pendingPin"

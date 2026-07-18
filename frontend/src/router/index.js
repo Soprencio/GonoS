@@ -44,6 +44,12 @@ const routes = [
     component: () => import('../views/ReviewView.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: '/clase/:claseId/alumno/:usuarioId',
+    name: 'alumno-perfil',
+    component: () => import('../views/AlumnoPerfilView.vue'),
+    meta: { requiresAuth: true }
+  },
 ]
 
 const router = createRouter({

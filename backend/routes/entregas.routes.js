@@ -190,7 +190,7 @@ router.get('/trabajos/:trabajoId/entregas', requireAuth, async (req, res) => {
     }
 
     const participacion = await getParticipacion(req.user.id, tps[0].clase_id);
-    if (!participacion || participacion.rol !== 'Profesor') {
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
       return res.status(403).json({ error: 'Solo el profesor puede ver las entregas de este trabajo' });
     }
 
@@ -244,6 +244,18 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'No tenés acceso a esta entrega' });
     }
 
+    // Determinar si el usuario puede calificar esta entrega
+    let puedeCalificar = false;
+    if (participacion.rol === 'Creador') {
+      puedeCalificar = true;
+    } else if (participacion.rol === 'Profesor') {
+      const [tps] = await pool.execute(
+        'SELECT participacion_id FROM trabajos WHERE tp_id = ?',
+        [entrega.tp_id]
+      );
+      puedeCalificar = tps.length > 0 && tps[0].participacion_id === participacion.participacion_id;
+    }
+
     const [archivosExtra] = await pool.execute(
       'SELECT archivo_extra_id, nombre, nombre_original FROM archivo_extra WHERE entrega_id = ?',
       [entrega.entrega_id]
@@ -266,6 +278,7 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
       estado: entrega.asignacion_estado,
       nota: entrega.nota,
       rol: participacion.rol,
+      puedeCalificar,
       archivos_extra: extras,
       alumno: {
         id: entrega.usuario_id,
@@ -374,7 +387,7 @@ router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
 
   try {
     const [entregas] = await pool.execute(
-      `SELECT e.entrega_id, e.asignacion_id, t.clase_id
+      `SELECT e.entrega_id, e.asignacion_id, t.clase_id, t.tp_id
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
        JOIN trabajos t ON a.tp_id = t.tp_id
@@ -387,8 +400,17 @@ router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
     }
 
     const participacion = await getParticipacion(req.user.id, entregas[0].clase_id);
-    if (!participacion || participacion.rol !== 'Profesor') {
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
       return res.status(403).json({ error: 'Solo el profesor puede calificar' });
+    }
+
+    // Verificar que puede calificar este trabajo (solo si lo creó o es Creador de la clase)
+    const [tps] = await pool.execute(
+      'SELECT participacion_id FROM trabajos WHERE tp_id = ?',
+      [entregas[0].tp_id]
+    );
+    if (tps.length > 0 && participacion.rol !== 'Creador' && tps[0].participacion_id !== participacion.participacion_id) {
+      return res.status(403).json({ error: 'No podés calificar un trabajo que no creaste' });
     }
 
     const estadoFinal = notaNum >= 6 ? 'Aprobado' : 'Revisado';

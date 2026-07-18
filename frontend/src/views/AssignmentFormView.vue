@@ -14,6 +14,7 @@ const api = useApi()
 
 const descripcion = ref('')
 const fechaEntrega = ref('')
+const horaEntrega = ref('23:59')
 const formatos = ref({
   obj: false,
   stl: false,
@@ -70,8 +71,13 @@ async function nextStep() {
       error.value = 'La fecha de entrega es obligatoria'
       return
     }
-    if (new Date(fechaEntrega.value) <= new Date()) {
-      error.value = 'La fecha de entrega debe ser una fecha futura'
+    const fechaHora = new Date(`${fechaEntrega.value}T${horaEntrega.value}:00`)
+    if (isNaN(fechaHora.getTime())) {
+      error.value = 'Fecha u hora inválida'
+      return
+    }
+    if (fechaHora <= new Date()) {
+      error.value = 'La fecha de entrega debe ser una fecha y hora futura'
       return
     }
     if (selectedFormats.value.length === 0) {
@@ -91,9 +97,10 @@ async function submit() {
 
   creating.value = true
   try {
+    const fechaHora = `${fechaEntrega.value}T${horaEntrega.value}:00`
     const res = await api.post(`/clases/${props.claseId}/trabajos`, {
       descripcion: descripcion.value.trim(),
-      fecha_entrega: fechaEntrega.value,
+      fecha_entrega: fechaHora,
       formatos_aceptados: selectedFormats.value,
       alumnos_ids: selectedAlumnos.value
     })
@@ -137,13 +144,19 @@ onMounted(async () => {
             ></textarea>
           </div>
           <div class="field">
-            <label for="af-fecha">Fecha de entrega</label>
-            <input
-              id="af-fecha"
-              v-model="fechaEntrega"
-              type="date"
-              :min="today()"
-            />
+            <label for="af-fecha">Fecha y hora de entrega</label>
+            <div class="datetime-row">
+              <input
+                id="af-fecha"
+                v-model="fechaEntrega"
+                type="date"
+                :min="today()"
+              />
+              <input
+                v-model="horaEntrega"
+                type="time"
+              />
+            </div>
           </div>
           <div class="field">
             <label>Formatos aceptados</label>
@@ -249,8 +262,19 @@ onMounted(async () => {
   font-size: 0.85rem;
 }
 
+.datetime-row {
+  display: flex;
+  gap: 8px;
+}
+
+.datetime-row input[type="date"],
+.datetime-row input[type="time"] {
+  flex: 1;
+}
+
 .field textarea,
-.field input[type="date"] {
+.field input[type="date"],
+.field input[type="time"] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--color-border);

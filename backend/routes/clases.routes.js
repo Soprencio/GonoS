@@ -30,7 +30,8 @@ router.get('/', requireAuth, async (req, res) => {
   try {
     const [rows] = await pool.execute(
       `SELECT c.clase_id, c.nombre, c.descripcion, c.codigo, c.created_at,
-              r.nombre AS rol
+              r.nombre AS rol,
+              (SELECT COUNT(*) FROM trabajos WHERE clase_id = c.clase_id) AS cantidad_trabajos
        FROM clases c
        JOIN participaciones p ON c.clase_id = p.clase_id
        JOIN roles r ON p.rol_id = r.rol_id
@@ -71,20 +72,20 @@ router.post('/', requireAuth, async (req, res) => {
       [nombreSaneado, descSaneado, codigo]
     );
 
-    await conn.execute(
-      'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 2)',
-      [req.user.id, claseResult.insertId]
-    );
+      await conn.execute(
+        'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 1)',
+        [req.user.id, claseResult.insertId]
+      );
 
-    await conn.commit();
+      await conn.commit();
 
-    res.status(201).json({
-      clase_id: claseResult.insertId,
-      nombre: nombreSaneado,
-      descripcion: descSaneado,
-      codigo,
-      rol: 'Profesor'
-    });
+      res.status(201).json({
+        clase_id: claseResult.insertId,
+        nombre: nombreSaneado,
+        descripcion: descSaneado,
+        codigo,
+        rol: 'Creador'
+      });
   } catch (err) {
     await conn.rollback();
     // Si el error es por código duplicado (UNIQUE), reintentar
@@ -98,7 +99,7 @@ router.post('/', requireAuth, async (req, res) => {
           [nombreSaneado, descSaneado, codigo]
         );
         await conn.execute(
-          'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 2)',
+          'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 1)',
           [req.user.id, claseResult.insertId]
         );
         await conn.commit();
@@ -107,7 +108,7 @@ router.post('/', requireAuth, async (req, res) => {
           nombre: nombreSaneado,
           descripcion: descSaneado,
           codigo,
-          rol: 'Profesor'
+          rol: 'Creador'
         });
       } catch (retryErr) {
         await conn.rollback();
@@ -135,6 +136,90 @@ router.get('/codigo/:codigo', requireAuth, async (req, res) => {
     res.json(rows[0]);
   } catch (err) {
     console.error('Error al buscar código:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// GET /api/clases/:claseId/participantes — listar participantes agrupados por rol
+router.get('/:claseId/participantes', requireAuth, async (req, res) => {
+  try {
+    const [miPart] = await pool.execute(
+      `SELECT r.nombre AS rol FROM participaciones p
+       JOIN roles r ON p.rol_id = r.rol_id
+       WHERE p.usuario_id = ? AND p.clase_id = ?`,
+      [req.user.id, req.params.claseId]
+    );
+    if (miPart.length === 0) {
+      return res.status(403).json({ error: 'No tenés acceso a esta clase' });
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT p.participacion_id, p.rol_id, r.nombre AS rol,
+              u.usuario_id, u.nombre, u.apellido, u.mail
+       FROM participaciones p
+       JOIN usuarios u ON p.usuario_id = u.usuario_id
+       JOIN roles r ON p.rol_id = r.rol_id
+       WHERE p.clase_id = ?
+       ORDER BY r.rol_id, u.apellido, u.nombre`,
+      [req.params.claseId]
+    );
+
+    const creador = rows.filter(r => r.rol === 'Creador');
+    const profesores = rows.filter(r => r.rol === 'Profesor');
+    const alumnos = rows.filter(r => r.rol === 'Alumno');
+
+    res.json({
+      miRol: miPart[0].rol,
+      creador: creador.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail })),
+      profesores: profesores.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail })),
+      alumnos: alumnos.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail }))
+    });
+  } catch (err) {
+    console.error('Error al listar participantes:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// DELETE /api/clases/:claseId/participantes/:participacionId — sacar participante
+router.delete('/:claseId/participantes/:participacionId', requireAuth, async (req, res) => {
+  try {
+    const [miPart] = await pool.execute(
+      `SELECT r.nombre AS rol FROM participaciones p
+       JOIN roles r ON p.rol_id = r.rol_id
+       WHERE p.usuario_id = ? AND p.clase_id = ?`,
+      [req.user.id, req.params.claseId]
+    );
+    if (miPart.length === 0) {
+      return res.status(403).json({ error: 'No tenés acceso a esta clase' });
+    }
+
+    const miRol = miPart[0].rol;
+
+    const [targetPart] = await pool.execute(
+      `SELECT r.nombre AS rol FROM participaciones p
+       JOIN roles r ON p.rol_id = r.rol_id
+       WHERE p.participacion_id = ? AND p.clase_id = ?`,
+      [req.params.participacionId, req.params.claseId]
+    );
+    if (targetPart.length === 0) {
+      return res.status(404).json({ error: 'Participante no encontrado' });
+    }
+
+    const targetRol = targetPart[0].rol;
+
+    if (miRol !== 'Creador') {
+      if (miRol === 'Profesor' && targetRol !== 'Alumno') {
+        return res.status(403).json({ error: 'Solo podés sacar alumnos' });
+      }
+      if (miRol === 'Alumno') {
+        return res.status(403).json({ error: 'No tenés permiso para sacar participantes' });
+      }
+    }
+
+    await pool.execute('DELETE FROM participaciones WHERE participacion_id = ?', [req.params.participacionId]);
+    res.json({ mensaje: 'Participante eliminado' });
+  } catch (err) {
+    console.error('Error al eliminar participante:', err);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

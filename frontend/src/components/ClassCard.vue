@@ -14,6 +14,7 @@ defineEmits(['click'])
     <div class="card-header">
       <h3 class="card-title">{{ clase.nombre }}</h3>
       <span v-if="clase.rol === 'Profesor'" class="badge">Profesor</span>
+      <span v-else-if="clase.rol === 'Creador'" class="badge">Creador</span>
     </div>
     <p v-if="clase.descripcion" class="card-desc">{{ clase.descripcion }}</p>
     <p class="card-meta">{{ clase.cantidad_trabajos || 0 }} trabajo(s)</p>

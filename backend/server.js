@@ -17,6 +17,7 @@ const clasesRoutes = require('./routes/clases.routes');
 const trabajosRoutes = require('./routes/trabajos.routes');
 const entregasRoutes = require('./routes/entregas.routes');
 const comentariosRoutes = require('./routes/comentarios.routes');
+const publicacionesRoutes = require('./routes/publicaciones.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,6 +50,7 @@ app.use('/api/clases', clasesRoutes);
 app.use('/api', trabajosRoutes);
 app.use('/api', entregasRoutes);
 app.use('/api', comentariosRoutes);
+app.use('/api', publicacionesRoutes);
 
 // Error handler específico de Multer (debe ir antes del 500 genérico)
 app.use((err, req, res, next) => {
