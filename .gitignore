@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Uploads (user files, not source code)
+backend/uploads/original/*
+backend/uploads/converted/*
+!backend/uploads/original/.gitkeep
+!backend/uploads/converted/.gitkeep
+
+# Build output
+frontend/dist/
+frontend/dist-ssr/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/*
+!.vscode/extensions.json
+.idea/

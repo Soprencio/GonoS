@@ -1,0 +1,87 @@
+:root {
+  --color-bg:            #FAFAF8;
+  --color-bg-elevated:   #FFFFFF;
+  --color-bg-subtle:     #F1F1EE;
+  --color-border:        #E2E2DE;
+  --color-text:          #1C1C1A;
+  --color-text-muted:    #6B6B66;
+  --color-text-disabled: #A9A9A4;
+
+  --color-accent:        #19B0B5;
+  --color-accent-hover:  #158D91;
+  --color-accent-soft:   rgba(25, 176, 181, 0.12);
+
+  --color-danger:        #C0392B;
+  --color-success:       #2E7D32;
+
+  --color-scrollbar-thumb: var(--color-accent);
+  --color-scrollbar-track: transparent;
+
+  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --transition-fast: 150ms ease;
+}
+
+[data-theme="dark"] {
+  --color-bg:            #121212;
+  --color-bg-elevated:   #1B1B1B;
+  --color-bg-subtle:     #232323;
+  --color-border:        #333331;
+  --color-text:          #EDEDEA;
+  --color-text-muted:    #A3A39D;
+  --color-text-disabled: #6B6B66;
+
+  --color-accent:        #E06710;
+  --color-accent-hover:  #F17A22;
+  --color-accent-soft:   rgba(224, 103, 16, 0.15);
+
+  --color-danger:        #E57373;
+  --color-success:       #66BB6A;
+
+  --color-scrollbar-thumb: var(--color-accent);
+  --color-scrollbar-track: transparent;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  margin: 0;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--color-scrollbar-track); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar-thumb);
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+}
+
+button.primary {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+button.primary:hover { background: var(--color-accent-hover); }
+
+button.secondary {
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+a, .link { color: var(--color-accent); }
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
