@@ -15,7 +15,16 @@ let prevX = 0, prevY = 0
 let animId = null
 let unsubViewChange = null
 
+let hoveredFaceIdx = -1
+let hoveredCornerIdx = -1
+let cornerSphere = null
+
 const HALF = 2.5
+const CORNER_SPHERE_RADIUS = 1.4
+const CORNER_HIT_DIST = 1.7
+const FACE_BTN_MARGIN = 0.125
+const FACE_BTN_MIN = FACE_BTN_MARGIN
+const FACE_BTN_MAX = 1 - FACE_BTN_MARGIN
 const CORNER_POS = [
   [ HALF,  HALF,  HALF], [ HALF,  HALF, -HALF], [ HALF, -HALF,  HALF], [ HALF, -HALF, -HALF],
   [-HALF,  HALF,  HALF], [-HALF,  HALF, -HALF], [-HALF, -HALF,  HALF], [-HALF, -HALF, -HALF]
@@ -77,6 +86,21 @@ function initCube() {
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x111111 })
   const edges = new THREE.LineSegments(edgeGeo, edgeMat)
   cubeMesh.add(edges)
+
+  // Esfera transparente de feedback para las esquinas
+  const sphGeo = new THREE.SphereGeometry(CORNER_SPHERE_RADIUS, 32, 32)
+  const sphMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.35,
+    depthTest: false,
+    depthWrite: false,
+    side: THREE.DoubleSide
+  })
+  cornerSphere = new THREE.Mesh(sphGeo, sphMat)
+  cornerSphere.visible = false
+  cornerSphere.renderOrder = 999
+  cubeMesh.add(cornerSphere)
 
   scene.add(cubeMesh)
 
@@ -141,30 +165,80 @@ function faceDirFromNormal(n) {
   return null
 }
 
-function cornerDirFromPoint(p) {
+function cornerIndexFromPoint(p) {
   for (let i = 0; i < CORNER_POS.length; i++) {
     const dx = p.x - CORNER_POS[i][0]
     const dy = p.y - CORNER_POS[i][1]
     const dz = p.z - CORNER_POS[i][2]
     const dist = Math.sqrt(dx*dx + dy*dy + dz*dz)
-    if (dist < 0.9) return CORNER_DIR[i]
+    if (dist < CORNER_HIT_DIST) return i
   }
-  return null
+  return -1
+}
+
+function isInFaceButton(uv) {
+  if (!uv) return false
+  return uv.x >= FACE_BTN_MIN && uv.x <= FACE_BTN_MAX &&
+         uv.y >= FACE_BTN_MIN && uv.y <= FACE_BTN_MAX
+}
+
+function clearHover() {
+  if (hoveredFaceIdx >= 0 && cubeMesh && cubeMesh.material[hoveredFaceIdx]) {
+    cubeMesh.material[hoveredFaceIdx].emissive.setHex(0x000000)
+    cubeMesh.material[hoveredFaceIdx].emissiveIntensity = 0
+    hoveredFaceIdx = -1
+  }
+  if (cornerSphere) cornerSphere.visible = false
+  hoveredCornerIdx = -1
+}
+
+function updateHover(hit) {
+  clearHover()
+  if (!hit) return
+
+  const cornerIdx = cornerIndexFromPoint(hit.point)
+  if (cornerIdx >= 0) {
+    hoveredCornerIdx = cornerIdx
+    cornerSphere.position.set(...CORNER_POS[cornerIdx])
+    cornerSphere.visible = true
+    return
+  }
+
+  if (!hit.face) return
+
+  if (!isInFaceButton(hit.uv)) return
+
+  const dir = faceDirFromNormal(hit.face.normal)
+  if (dir) {
+    const idx = FACE_CONFIG.findIndex(f =>
+      f.dir.x === dir.x && f.dir.y === dir.y && f.dir.z === dir.z
+    )
+    if (idx >= 0 && cubeMesh.material[idx]) {
+      hoveredFaceIdx = idx
+      cubeMesh.material[idx].emissive.setHex(0xffffff)
+      cubeMesh.material[idx].emissiveIntensity = 0.35
+    }
+  }
 }
 
 function onPointerDown(e) {
   isDown = true; didDrag = false
   prevX = e.clientX; prevY = e.clientY
   cubeCanvasRef.value.setPointerCapture(e.pointerId)
+  clearHover()
 }
 
 function onPointerMove(e) {
-  if (!isDown) return
-  const dx = e.clientX - prevX
-  const dy = e.clientY - prevY
-  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDrag = true
-  prevX = e.clientX; prevY = e.clientY
-  rotateMainCam(dx, dy)
+  if (isDown) {
+    const dx = e.clientX - prevX
+    const dy = e.clientY - prevY
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDrag = true
+    prevX = e.clientX; prevY = e.clientY
+    rotateMainCam(dx, dy)
+    clearHover()
+  } else {
+    updateHover(getHit(e))
+  }
 }
 
 function onPointerUp(e) {
@@ -173,21 +247,23 @@ function onPointerUp(e) {
   if (didDrag) return
 
   const hit = getHit(e)
-  if (!hit || !hit.face) return
+  if (!hit) return
 
-  if (hit.object === cubeMesh) {
-    const corner = cornerDirFromPoint(hit.point)
-    if (corner) {
-      props.viewer.setViewDirection(corner)
-    } else {
-      const face = faceDirFromNormal(hit.face.normal)
-      if (face) props.viewer.setViewDirection(face)
-    }
+  const corner = cornerIndexFromPoint(hit.point)
+  if (corner >= 0) {
+    props.viewer.setViewDirection(CORNER_DIR[corner])
+    return
+  }
+
+  if (hit.face && isInFaceButton(hit.uv)) {
+    const face = faceDirFromNormal(hit.face.normal)
+    if (face) props.viewer.setViewDirection(face)
   }
 }
 
-function onPointerLeave(e) {
+function onPointerLeave() {
   isDown = false
+  clearHover()
 }
 
 onMounted(() => {
