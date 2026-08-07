@@ -15,6 +15,7 @@ const api = useApi()
 const descripcion = ref('')
 const fechaEntrega = ref('')
 const horaEntrega = ref('23:59')
+const notaMinima = ref(6)
 const formatos = ref({
   obj: false,
   stl: false,
@@ -84,6 +85,11 @@ async function nextStep() {
       error.value = 'Seleccioná al menos un formato aceptado'
       return
     }
+    const nm = parseFloat(notaMinima.value)
+    if (isNaN(nm) || nm < 1 || nm > 10) {
+      error.value = 'La nota mínima de aprobación debe estar entre 1 y 10'
+      return
+    }
     step.value = 2
   }
 }
@@ -102,6 +108,7 @@ async function submit() {
       descripcion: descripcion.value.trim(),
       fecha_entrega: fechaHora,
       formatos_aceptados: selectedFormats.value,
+      nota_minima: parseFloat(notaMinima.value),
       alumnos_ids: selectedAlumnos.value
     })
     emit('created', res.data)
@@ -173,6 +180,17 @@ onMounted(async () => {
             <p class="formats-note">
               Otros formatos como .fbx pueden no visualizarse correctamente.
             </p>
+          </div>
+          <div class="field">
+            <label for="af-nota-minima">Nota mínima de aprobación</label>
+            <input
+              id="af-nota-minima"
+              v-model="notaMinima"
+              type="number"
+              min="1"
+              max="10"
+              step="0.01"
+            />
           </div>
           <p v-if="error" class="error-msg">{{ error }}</p>
           <div class="modal-actions">
@@ -274,7 +292,8 @@ onMounted(async () => {
 
 .field textarea,
 .field input[type="date"],
-.field input[type="time"] {
+.field input[type="time"],
+.field input[type="number"] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--color-border);

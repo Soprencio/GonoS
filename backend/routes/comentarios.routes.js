@@ -59,8 +59,8 @@ router.post('/entregas/:entregaId/comentarios', requireAuth, async (req, res) =>
     }
 
     const participacion = await getParticipacion(req.user.id, entregaInfo.clase_id);
-    if (!participacion || participacion.rol !== 'Profesor') {
-      return res.status(403).json({ error: 'Solo el profesor puede comentar en esta entrega' });
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+      return res.status(403).json({ error: 'Solo el profesor o creador pueden comentar en esta entrega' });
     }
 
     const conn = await pool.getConnection();
@@ -180,8 +180,8 @@ router.delete('/comentarios/:id', requireAuth, async (req, res) => {
     const com = comentarios[0];
     const participacion = await getParticipacion(req.user.id, com.clase_id);
 
-    if (!participacion || participacion.rol !== 'Profesor') {
-      return res.status(403).json({ error: 'Solo el profesor puede eliminar comentarios' });
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+      return res.status(403).json({ error: 'Solo el profesor o creador pueden eliminar comentarios' });
     }
 
     // Las posiciones se borran por CASCADE

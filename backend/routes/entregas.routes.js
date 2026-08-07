@@ -196,10 +196,11 @@ router.get('/trabajos/:trabajoId/entregas', requireAuth, async (req, res) => {
 
     const [entregas] = await pool.execute(
       `SELECT e.entrega_id, e.archivo, e.nombre_original, e.fecha_entrega, e.devolucion,
-              a.asignacion_id, a.estado, a.nota,
+              a.asignacion_id, a.estado, a.nota, t.nota_minima,
               u.usuario_id, u.nombre AS alumno_nombre, u.apellido AS alumno_apellido, u.mail AS alumno_mail
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+       JOIN trabajos t ON a.tp_id = t.tp_id
        JOIN participaciones p ON a.participacion_id = p.participacion_id
        JOIN usuarios u ON p.usuario_id = u.usuario_id
        WHERE a.tp_id = ?
@@ -219,10 +220,12 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
   try {
     const [entregas] = await pool.execute(
       `SELECT e.*, a.tp_id, a.estado AS asignacion_estado, a.nota,
+              t.nota_minima,
               p.usuario_id, p.clase_id,
               u.nombre AS alumno_nombre, u.apellido AS alumno_apellido
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+       JOIN trabajos t ON a.tp_id = t.tp_id
        JOIN participaciones p ON a.participacion_id = p.participacion_id
        JOIN usuarios u ON p.usuario_id = u.usuario_id
        WHERE e.entrega_id = ?`,
@@ -277,6 +280,7 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
       tp_id: entrega.tp_id,
       estado: entrega.asignacion_estado,
       nota: entrega.nota,
+      nota_minima: entrega.nota_minima,
       rol: participacion.rol,
       puedeCalificar,
       archivos_extra: extras,
@@ -387,7 +391,7 @@ router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
 
   try {
     const [entregas] = await pool.execute(
-      `SELECT e.entrega_id, e.asignacion_id, t.clase_id, t.tp_id
+      `SELECT e.entrega_id, e.asignacion_id, t.clase_id, t.tp_id, t.nota_minima
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
        JOIN trabajos t ON a.tp_id = t.tp_id
@@ -413,14 +417,17 @@ router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'No podés calificar un trabajo que no creaste' });
     }
 
-    const estadoFinal = notaNum >= 6 ? 'Aprobado' : 'Revisado';
+    const notaMinima = entregas[0].nota_minima === null || entregas[0].nota_minima === undefined
+      ? 6
+      : parseFloat(entregas[0].nota_minima);
+    const estadoFinal = notaNum >= notaMinima ? 'Aprobado' : 'Revisado';
 
     await pool.execute(
       'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
       [notaNum, estadoFinal, entregas[0].asignacion_id]
     );
 
-    res.json({ mensaje: 'Nota guardada', nota: notaNum, estado: estadoFinal });
+    res.json({ mensaje: 'Nota guardada', nota: notaNum, nota_minima: notaMinima, estado: estadoFinal });
   } catch (err) {
     console.error('Error al guardar nota:', err);
     res.status(500).json({ error: 'Error interno del servidor' });

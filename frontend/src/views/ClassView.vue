@@ -23,6 +23,7 @@ const posting = ref(false)
 const isTeacher = computed(() =>
   clase.value?.rol === 'Profesor' || clase.value?.rol === 'Creador'
 )
+const esDocente = isTeacher
 const canPost = computed(() =>
   clase.value?.rol === 'Profesor' || clase.value?.rol === 'Creador'
 )
@@ -317,7 +318,12 @@ onMounted(async () => {
                   class="part-card"
                 >
                   <div class="part-info">
-                    <button class="link-btn" @click="verAlumno(p.usuario_id)">{{ p.nombre }} {{ p.apellido }}</button>
+                    <button
+                      v-if="esDocente"
+                      class="link-btn"
+                      @click="verAlumno(p.usuario_id)"
+                    >{{ p.nombre }} {{ p.apellido }}</button>
+                    <span v-else class="part-name">{{ p.nombre }} {{ p.apellido }}</span>
                     <span class="part-mail">{{ p.mail }}</span>
                   </div>
                   <button

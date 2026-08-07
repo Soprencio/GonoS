@@ -81,6 +81,7 @@ CREATE TABLE trabajos (
   descripcion        TEXT NOT NULL,
   fecha_entrega      DATETIME NOT NULL,
   formatos_aceptados JSON NOT NULL,
+  nota_minima        DECIMAL(5,2) NOT NULL DEFAULT 6.00,
   created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (tp_id),

@@ -154,7 +154,8 @@ router.get('/:claseId/participantes', requireAuth, async (req, res) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT p.participacion_id, p.rol_id, r.nombre AS rol,
+      `SELECT p.participacion_id, p.rol_id, p.created_at AS fecha_ingreso,
+              r.nombre AS rol,
               u.usuario_id, u.nombre, u.apellido, u.mail
        FROM participaciones p
        JOIN usuarios u ON p.usuario_id = u.usuario_id
@@ -170,9 +171,9 @@ router.get('/:claseId/participantes', requireAuth, async (req, res) => {
 
     res.json({
       miRol: miPart[0].rol,
-      creador: creador.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail })),
-      profesores: profesores.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail })),
-      alumnos: alumnos.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail }))
+      creador: creador.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail, fecha_ingreso: r.fecha_ingreso })),
+      profesores: profesores.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail, fecha_ingreso: r.fecha_ingreso })),
+      alumnos: alumnos.map(r => ({ participacion_id: r.participacion_id, usuario_id: r.usuario_id, nombre: r.nombre, apellido: r.apellido, mail: r.mail, fecha_ingreso: r.fecha_ingreso }))
     });
   } catch (err) {
     console.error('Error al listar participantes:', err);

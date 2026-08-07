@@ -48,7 +48,12 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
     return res.status(403).json({ error: 'Solo el profesor puede crear trabajos en esta clase' });
   }
 
-  const { descripcion, fecha_entrega, formatos_aceptados, alumnos_ids } = req.body;
+  const { descripcion, fecha_entrega, formatos_aceptados, alumnos_ids, nota_minima } = req.body;
+
+  const notaMinima = nota_minima === undefined || nota_minima === null ? 6 : parseFloat(nota_minima);
+  if (isNaN(notaMinima) || notaMinima < 1 || notaMinima > 10) {
+    return res.status(400).json({ error: 'La nota mínima de aprobación debe estar entre 1 y 10' });
+  }
 
   if (!descripcion || !descripcion.trim()) {
     return res.status(400).json({ error: 'La descripción del trabajo es obligatoria' });
@@ -80,8 +85,8 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
     const descSaneada = sanitizeText(descripcion.trim());
 
     const [tpResult] = await conn.execute(
-      'INSERT INTO trabajos (clase_id, participacion_id, descripcion, fecha_entrega, formatos_aceptados) VALUES (?, ?, ?, ?, ?)',
-      [req.params.claseId, participacion.participacion_id, descSaneada, fecha, JSON.stringify(formatos_aceptados)]
+      'INSERT INTO trabajos (clase_id, participacion_id, descripcion, fecha_entrega, formatos_aceptados, nota_minima) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.params.claseId, participacion.participacion_id, descSaneada, fecha, JSON.stringify(formatos_aceptados), notaMinima]
     );
 
     for (const participacionId of alumnos_ids) {
@@ -99,6 +104,7 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
       descripcion: descSaneada,
       fecha_entrega: fecha,
       formatos_aceptados,
+      nota_minima: notaMinima,
       alumnos_asignados: alumnos_ids.length
     });
   } catch (err) {
@@ -220,7 +226,7 @@ router.get('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
   try {
     if (participacion.rol === 'Profesor' || participacion.rol === 'Creador') {
       const [trabajos] = await pool.execute(
-        `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.formatos_aceptados, t.created_at, t.participacion_id,
+        `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.formatos_aceptados, t.nota_minima, t.created_at, t.participacion_id,
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id) AS total_alumnos,
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Pendiente') AS pendientes,
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'En revisión') AS en_revision,
@@ -238,7 +244,7 @@ router.get('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
       })));
     } else {
       const [trabajos] = await pool.execute(
-        `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.formatos_aceptados, t.created_at,
+        `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.formatos_aceptados, t.nota_minima, t.created_at,
                 a.estado, a.nota, a.asignacion_id
          FROM trabajos t
          JOIN asignacion a ON t.tp_id = a.tp_id
@@ -339,7 +345,7 @@ router.get('/usuarios/:usuarioId/trabajos', requireAuth, async (req, res) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT t.tp_id, t.descripcion, t.fecha_entrega,
+      `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.nota_minima,
               a.asignacion_id, a.nota, a.estado,
               (SELECT e.entrega_id FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS entrega_id
        FROM trabajos t
@@ -353,6 +359,7 @@ router.get('/usuarios/:usuarioId/trabajos', requireAuth, async (req, res) => {
       tp_id: r.tp_id,
       descripcion: r.descripcion,
       fecha_entrega: r.fecha_entrega,
+      nota_minima: r.nota_minima,
       nota: r.nota,
       estado: r.estado,
       tieneEntrega: !!r.entrega_id

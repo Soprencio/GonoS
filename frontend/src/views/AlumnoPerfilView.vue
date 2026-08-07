@@ -11,6 +11,7 @@ const alumno = ref(null)
 const trabajos = ref([])
 const loading = ref(true)
 const error = ref('')
+const esDocente = ref(false)
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -37,9 +38,18 @@ function notaDisplay(nota) {
   return Number(nota).toFixed(2)
 }
 
-function notaStatus(nota) {
+function notaStatus(nota, notaMinima) {
   if (nota === null || nota === undefined) return ''
-  return nota >= 6 ? 'aprobado-status' : 'desaprobado-status'
+  const nm = parseFloat(notaMinima)
+  const umbral = isNaN(nm) ? 6 : nm
+  return nota >= umbral ? 'aprobado-status' : 'desaprobado-status'
+}
+
+function aprobado(nota, notaMinima) {
+  if (nota === null || nota === undefined) return false
+  const nm = parseFloat(notaMinima)
+  const umbral = isNaN(nm) ? 6 : nm
+  return nota >= umbral
 }
 
 onMounted(async () => {
@@ -47,21 +57,23 @@ onMounted(async () => {
     const claseId = route.params.claseId
     const usuarioId = route.params.usuarioId
 
-    const [alumnoRes, trabajosRes] = await Promise.all([
-      api.get(`/clases/${claseId}/participantes`),
-      api.get(`/usuarios/${usuarioId}/trabajos`, { params: { clase_id: claseId } })
-    ])
+    const alumnoRes = await api.get(`/clases/${claseId}/participantes`)
+    esDocente.value = alumnoRes.data.miRol === 'Profesor' || alumnoRes.data.miRol === 'Creador'
 
     const todos = [
       ...alumnoRes.data.creador,
       ...alumnoRes.data.profesores,
       ...alumnoRes.data.alumnos
     ]
-    alumno.value = todos.find(p => p.usuario_id == usuarioId) || { nombre: 'Alumno', apellido: '', mail: '' }
-    trabajos.value = trabajosRes.data
+    alumno.value = todos.find(p => p.usuario_id == usuarioId) || null
+
+    if (esDocente.value && alumno.value) {
+      const trabajosRes = await api.get(`/usuarios/${usuarioId}/trabajos`, { params: { clase_id: claseId } })
+      trabajos.value = trabajosRes.data
+    }
   } catch (err) {
     if (err.response?.status === 403) {
-      router.push('/')
+      error.value = 'No tenés permiso para ver el perfil de este alumno'
     } else {
       error.value = 'Error al cargar los datos del alumno'
     }
@@ -78,44 +90,54 @@ onMounted(async () => {
     <template v-else>
       <header class="header">
         <button class="secondary" @click="router.back()">← Volver</button>
-        <div class="header-info">
+        <div v-if="alumno" class="header-info">
           <h1 class="title">{{ alumno.nombre }} {{ alumno.apellido }}</h1>
           <p class="subtitle">{{ alumno.mail }}</p>
+        </div>
+        <div v-else class="header-info">
+          <h1 class="title">Alumno</h1>
+          <p class="subtitle">No encontrado</p>
         </div>
       </header>
 
       <main class="content">
-        <h2 class="section-title">Trabajos asignados</h2>
+        <p v-if="alumno?.fecha_ingreso" class="ingreso-info">
+          Se unió a la clase el {{ formatDate(alumno.fecha_ingreso) }}
+        </p>
 
-        <p v-if="trabajos.length === 0" class="empty">Este alumno no tiene trabajos asignados.</p>
-        <div v-else class="trabajos-list">
-          <div
-            v-for="t in trabajos"
-            :key="t.tp_id"
-            class="trabajo-card"
-          >
-            <div class="trabajo-header">
-              <span class="trabajo-desc">{{ t.descripcion }}</span>
-              <span :class="['estado-badge', estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).cls]">
-                {{ estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).label }}
-              </span>
-            </div>
-            <div class="trabajo-meta">
-              <span class="meta-label">Entrega:</span>
-              <span class="meta-value" :class="{ 'vencido': new Date(t.fecha_entrega) < new Date() }">
-                {{ formatDate(t.fecha_entrega) }}
-              </span>
-            </div>
-            <div class="trabajo-meta">
-              <span class="meta-label">Nota:</span>
-              <span :class="['meta-value', 'nota', notaStatus(t.nota)]">
-                {{ notaDisplay(t.nota) }}
-              </span>
-              <span v-if="t.nota >= 6" class="nota-label aprobado">Aprobado</span>
-              <span v-else-if="t.nota !== null" class="nota-label desaprobado">Desaprobado</span>
+        <template v-if="esDocente">
+          <h2 class="section-title">Trabajos asignados</h2>
+
+          <p v-if="trabajos.length === 0" class="empty">Este alumno no tiene trabajos asignados.</p>
+          <div v-else class="trabajos-list">
+            <div
+              v-for="t in trabajos"
+              :key="t.tp_id"
+              class="trabajo-card"
+            >
+              <div class="trabajo-header">
+                <span class="trabajo-desc">{{ t.descripcion }}</span>
+                <span :class="['estado-badge', estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).cls]">
+                  {{ estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).label }}
+                </span>
+              </div>
+              <div class="trabajo-meta">
+                <span class="meta-label">Entrega:</span>
+                <span class="meta-value" :class="{ 'vencido': new Date(t.fecha_entrega) < new Date() }">
+                  {{ formatDate(t.fecha_entrega) }}
+                </span>
+              </div>
+              <div class="trabajo-meta">
+                <span class="meta-label">Nota:</span>
+                <span :class="['meta-value', 'nota', notaStatus(t.nota, t.nota_minima)]">
+                  {{ notaDisplay(t.nota) }}
+                </span>
+                <span v-if="aprobado(t.nota, t.nota_minima)" class="nota-label aprobado">Aprobado</span>
+                <span v-else-if="t.nota !== null" class="nota-label desaprobado">Desaprobado</span>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </main>
     </template>
   </div>
@@ -152,6 +174,15 @@ onMounted(async () => {
   margin: 0;
   font-size: 0.85rem;
   color: var(--color-text-muted);
+}
+
+.ingreso-info {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin: 0 0 24px;
 }
 
 .content {

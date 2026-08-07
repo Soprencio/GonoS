@@ -21,6 +21,11 @@ const isTeacher = computed(() =>
   trabajo.value?.rol === 'Profesor' || trabajo.value?.rol === 'Creador'
 )
 
+const notaMinima = computed(() => {
+  const nm = parseFloat(trabajo.value?.nota_minima)
+  return isNaN(nm) ? 6 : nm
+})
+
 function formatDate(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -120,6 +125,11 @@ onMounted(async () => {
           </div>
         </section>
 
+        <section class="section">
+          <h2>Nota mínima de aprobación</h2>
+          <p class="due-date">{{ notaMinima }}</p>
+        </section>
+
         <!-- Alumno -->
         <div v-if="trabajo.rol === 'Alumno'" class="actions">
           <button
@@ -140,8 +150,8 @@ onMounted(async () => {
             Estado: <strong>{{ trabajo.asignacion?.estado || 'Sin estado' }}</strong>
             <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0">
               — Nota: {{ trabajo.asignacion.nota }}
-              <span :class="trabajo.asignacion.nota >= 6 ? 'aprobado' : 'desaprobado'">
-                ({{ trabajo.asignacion.nota >= 6 ? 'Aprobado' : 'Desaprobado' }})
+              <span :class="trabajo.asignacion.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
+                ({{ trabajo.asignacion.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
               </span>
             </span>
           </p>

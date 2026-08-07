@@ -19,6 +19,7 @@ export function useViewer(canvasRef) {
   let animationId
   let modelGroup = new THREE.Group()
   let thatOpenComponents = null
+  let thatOpenFragments = null
   let selectionHelper = null
   let hiddenObjects = []
   let currentFormat = ''
@@ -194,6 +195,9 @@ export function useViewer(canvasRef) {
         camera.top = f
         camera.bottom = -f
         camera.updateProjectionMatrix()
+      }
+      if (thatOpenFragments) {
+        thatOpenFragments.core.update()
       }
       renderer.render(scene, camera)
     }
@@ -441,20 +445,29 @@ export function useViewer(canvasRef) {
 
   async function loadIFC(url) {
     const mod = await import('@thatopen/components')
-    const { Components, IfcLoader } = mod
+    const { Components, IfcLoader, FragmentsManager } = mod
 
     const components = new Components()
     thatOpenComponents = components
 
+    const fragments = components.get(FragmentsManager)
+    fragments.init(await FragmentsManager.getWorker())
+    thatOpenFragments = fragments
+
     const ifcLoader = new IfcLoader(components)
-    await ifcLoader.setup({ autoSetWasm: true })
+    ifcLoader.settings.wasm.path = '/'
+    ifcLoader.settings.wasm.absolute = true
+    await ifcLoader.setup({ autoSetWasm: false })
 
     const response = await fetch(url)
-    const buffer = await response.arrayBuffer()
+    if (!response.ok) {
+      throw new Error(`Error al descargar el archivo (${response.status})`)
+    }
+    const buffer = new Uint8Array(await response.arrayBuffer())
 
     const model = await ifcLoader.load(buffer, true, 'model')
-    model.name = 'Modelo IFC'
-    modelGroup.add(model)
+    model.object.name = 'Modelo IFC'
+    modelGroup.add(model.object)
   }
 
   function extractHierarchy() {

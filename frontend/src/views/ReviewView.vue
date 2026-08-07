@@ -3,6 +3,7 @@ import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import Viewer3D from '../components/viewer/Viewer3D.vue'
+import SvgViewer2D from '../components/viewer/SvgViewer2D.vue'
 import ElementTree from '../components/viewer/ElementTree.vue'
 import ElementInfo from '../components/viewer/ElementInfo.vue'
 import AnnotationPin from '../components/viewer/AnnotationPin.vue'
@@ -19,6 +20,7 @@ const blobUrl = ref('')
 const mtlUrl = ref('')
 const extraMap = ref({})
 const viewerRef = ref(null)
+const svgViewerRef = ref(null)
 const hierarchy = ref([])
 const selectedId = ref('')
 const is3DReady = ref(false)
@@ -43,6 +45,11 @@ const isProfesor = computed(() =>
 )
 
 const puedeCalificar = computed(() => !!entrega.value?.puedeCalificar)
+
+const notaMinima = computed(() => {
+  const nm = parseFloat(entrega.value?.nota_minima)
+  return isNaN(nm) ? 6 : nm
+})
 
 const is3DFormat = computed(() => {
   if (!entrega.value) return false
@@ -127,6 +134,22 @@ async function saveNota() {
   }
 }
 
+async function calificar() {
+  const nota = parseFloat(notaInput.value)
+  if (isNaN(nota) || nota < 0 || nota > 10) {
+    alert('La nota debe ser un número entre 0 y 10')
+    return
+  }
+  savingNota.value = true
+  try {
+    await api.patch(`/entregas/${route.params.id}/nota`, { nota })
+    router.go(-1)
+  } catch (err) {
+    alert(err.response?.data?.error || 'Error al guardar la nota')
+    savingNota.value = false
+  }
+}
+
 function toggleAnnotating() {
   annotating.value = !annotating.value
 }
@@ -167,8 +190,12 @@ async function deleteComment(id) {
 }
 
 function viewOnModel(pos) {
-  if (!viewerRef.value?.focusOnPoint || !pos) return
-  viewerRef.value.focusOnPoint(pos)
+  if (!pos) return
+  if (isSVG.value && svgViewerRef.value?.focusOnPoint) {
+    svgViewerRef.value.focusOnPoint(pos)
+  } else if (viewerRef.value?.focusOnPoint) {
+    viewerRef.value.focusOnPoint(pos)
+  }
   activeCommentId.value = comentarios.value.find(
     c => c.posicion?.x === pos.x && c.posicion?.y === pos.y && c.posicion?.z === pos.z
   )?.com_priv_id || null
@@ -284,21 +311,25 @@ onUnmounted(() => {
               class="nota-input"
               placeholder="0-10"
             />
+            <span class="nota-minima-hint">mín. {{ notaMinima }}</span>
             <button class="primary small" :disabled="savingNota" @click="saveNota">
               {{ savingNota ? 'Guardando...' : 'Confirmar nota' }}
+            </button>
+            <button class="primary small" :disabled="savingNota" @click="calificar">
+              {{ savingNota ? 'Guardando...' : 'Calificar' }}
             </button>
           </div>
           <div v-else class="nota-display">
             <span class="estado-badge">{{ entrega.estado }}</span>
             <span v-if="entrega.nota != null && entrega.nota > 0" class="nota-value">
               Nota: {{ entrega.nota }}
-              <span :class="entrega.nota >= 6 ? 'aprobado' : 'desaprobado'">
-                ({{ entrega.nota >= 6 ? 'Aprobado' : 'Desaprobado' }})
+              <span :class="entrega.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
+                ({{ entrega.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
               </span>
             </span>
           </div>
           <button
-            v-if="isProfesor && is3DFormat"
+            v-if="isProfesor && (is3DFormat || isSVG)"
             class="secondary"
             :class="{ active: annotating }"
             @click="toggleAnnotating"
@@ -355,9 +386,19 @@ onUnmounted(() => {
             </template>
           </Viewer3D>
 
-          <div v-else-if="isSVG && blobUrl" class="simple-viewer">
-            <object :data="blobUrl" type="image/svg+xml" class="svg-viewer">SVG no soportado</object>
-          </div>
+          <SvgViewer2D
+            v-else-if="isSVG && blobUrl"
+            ref="svgViewerRef"
+            class="svg-container"
+            :src="blobUrl"
+            :annotating="annotating && isProfesor"
+            :comentarios="commentsWithPin"
+            :activeId="activeCommentId"
+            :pending="pendingPin"
+            @annotate-point="onAnnotatePoint"
+            @select="onPinClick"
+            @close="activeCommentId = null"
+          />
 
           <div v-else-if="isPDF && blobUrl" class="simple-viewer">
             <iframe :src="blobUrl" class="pdf-viewer" title="Documento PDF"></iframe>
@@ -393,7 +434,8 @@ onUnmounted(() => {
               <div class="pending-header">Nuevo pin</div>
               <div class="pending-card">
                 <div class="pin-coords">
-                  X: {{ pendingPin.worldPos.x.toFixed(3) }} &nbsp; Y: {{ pendingPin.worldPos.y.toFixed(3) }} &nbsp; Z: {{ pendingPin.worldPos.z.toFixed(3) }}
+                  X: {{ pendingPin.worldPos.x.toFixed(3) }} &nbsp; Y: {{ pendingPin.worldPos.y.toFixed(3) }}
+                  <span v-if="!isSVG">&nbsp; Z: {{ pendingPin.worldPos.z.toFixed(3) }}</span>
                 </div>
                 <textarea
                   v-model="pendingPin.texto"
@@ -507,6 +549,12 @@ onUnmounted(() => {
 
 .nota-label {
   font-size: 0.82rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.nota-minima-hint {
+  font-size: 0.72rem;
   color: var(--color-text-muted);
   white-space: nowrap;
 }
@@ -638,6 +686,11 @@ onUnmounted(() => {
   text-align: center;
 }
 
+.svg-container {
+  flex: 1;
+  min-height: 0;
+}
+
 .simple-viewer {
   flex: 1;
   display: flex;
@@ -647,7 +700,6 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.svg-viewer,
 .pdf-viewer,
 .image-viewer {
   width: 100%;

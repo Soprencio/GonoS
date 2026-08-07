@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 
@@ -11,6 +12,11 @@ const props = defineProps({
 
 const router = useRouter()
 const api = useApi()
+
+const notaMinima = computed(() => {
+  const nm = parseFloat(props.entrega.nota_minima)
+  return isNaN(nm) ? 6 : nm
+})
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -65,8 +71,8 @@ async function descargar() {
       <span v-if="entrega.devolucion" class="devolucion">{{ entrega.devolucion }}</span>
       <span v-if="entrega.nota != null && entrega.nota > 0" class="nota-badge">
         Nota: {{ entrega.nota }}
-        <span :class="entrega.nota >= 6 ? 'nota-aprobado' : 'nota-desaprobado'">
-          ({{ entrega.nota >= 6 ? 'Aprobado' : 'Desaprobado' }})
+        <span :class="entrega.nota >= notaMinima ? 'nota-aprobado' : 'nota-desaprobado'">
+          ({{ entrega.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
         </span>
       </span>
     </td>

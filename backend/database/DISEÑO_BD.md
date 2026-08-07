@@ -111,6 +111,7 @@ Una tarea/actividad dentro de una clase. La crea una participación con rol Prof
 | `descripcion` | `TEXT` | NOT NULL | Consigna del trabajo (hasta 64KB). |
 | `fecha_entrega` | `DATETIME` | NOT NULL | Fecha límite. Se valida en backend que no sea pasada al crear. |
 | `formatos_aceptados` | `JSON` | NOT NULL | Array de strings: `['.obj','.stl','.svg']`. MariaDB 10.6+ soporta JSON como tipo nativo. |
+| `nota_minima` | `DECIMAL(5,2)` | NOT NULL DEFAULT 6.00 | Nota mínima para aprobar el trabajo. La elige el profesor/creador al crear el trabajo. Determina el estado Aprobado/Revisado al calificar. |
 | `created_at` | `DATETIME` | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | `DATETIME` | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | |
 
