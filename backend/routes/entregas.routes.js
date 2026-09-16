@@ -3,6 +3,7 @@ const path = require('path');
 const pool = require('../database/connection');
 const { requireAuth } = require('../middleware/auth');
 const { upload, deleteFileIfExists, UPLOAD_DIR } = require('../middleware/upload');
+const { normalizarNotaMinima, validarNota, calcularEstadoFinal } = require('../utils/notas');
 
 const router = Router();
 
@@ -380,14 +381,12 @@ router.get('/entregas/:id/archivos/:archivoExtraId', requireAuth, async (req, re
 router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
   const { nota } = req.body;
 
-  if (nota === undefined || nota === null || isNaN(nota)) {
-    return res.status(400).json({ error: 'La nota es obligatoria y debe ser un número' });
+  const validacion = validarNota(nota);
+  if (!validacion.ok) {
+    return res.status(400).json({ error: validacion.error });
   }
 
-  const notaNum = parseFloat(nota);
-  if (notaNum < 0 || notaNum > 10) {
-    return res.status(400).json({ error: 'La nota debe estar entre 0 y 10' });
-  }
+  const notaNum = validacion.valor;
 
   try {
     const [entregas] = await pool.execute(
@@ -417,10 +416,8 @@ router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'No podés calificar un trabajo que no creaste' });
     }
 
-    const notaMinima = entregas[0].nota_minima === null || entregas[0].nota_minima === undefined
-      ? 6
-      : parseFloat(entregas[0].nota_minima);
-    const estadoFinal = notaNum >= notaMinima ? 'Aprobado' : 'Revisado';
+    const notaMinima = normalizarNotaMinima(entregas[0].nota_minima);
+    const estadoFinal = calcularEstadoFinal(notaNum, notaMinima);
 
     await pool.execute(
       'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',

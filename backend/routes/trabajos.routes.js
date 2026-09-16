@@ -230,7 +230,7 @@ router.get('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id) AS total_alumnos,
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Pendiente') AS pendientes,
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'En revisión') AS en_revision,
-                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Revisado') AS revisados,
+                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Desaprobado') AS desaprobados,
                 (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Aprobado') AS aprobados
          FROM trabajos t
          WHERE t.clase_id = ?

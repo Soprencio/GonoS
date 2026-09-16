@@ -30,7 +30,7 @@ async function getEntregaClaseId(entregaId) {
   return rows[0] || null;
 }
 
-const ESTADOS_VALIDOS = ['Pendiente', 'En revisión', 'Revisado', 'Aprobado'];
+const ESTADOS_VALIDOS = ['Pendiente', 'En revisión', 'Desaprobado', 'Aprobado'];
 
 // ── POST /api/entregas/:entregaId/comentarios — agregar comentario (solo Profesor)
 router.post('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => {

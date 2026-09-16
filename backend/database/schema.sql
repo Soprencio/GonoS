@@ -94,7 +94,7 @@ CREATE TABLE asignacion (
   tp_id            INT UNSIGNED NOT NULL,
   participacion_id INT UNSIGNED NOT NULL,
   nota             DECIMAL(5,2) NULL,
-  estado           ENUM('Pendiente','En revisión','Revisado','Aprobado') NOT NULL DEFAULT 'Pendiente',
+  estado           ENUM('Pendiente','En revisión','Desaprobado','Aprobado') NOT NULL DEFAULT 'Pendiente',
   created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (asignacion_id),

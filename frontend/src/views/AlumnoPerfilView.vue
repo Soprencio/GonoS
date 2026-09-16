@@ -27,7 +27,7 @@ function formatDate(iso) {
 
 function estadoInfo(estado, tieneEntrega, fechaEntrega) {
   if (estado === 'Aprobado') return { label: 'Aprobado', cls: 'estado-aprobado' }
-  if (estado === 'Revisado') return { label: 'Revisado', cls: 'estado-revisado' }
+  if (estado === 'Revisado' || estado === 'Desaprobado') return { label: 'Desaprobado', cls: 'estado-desaprobado' }
   if (tieneEntrega) return { label: 'En revisión', cls: 'estado-pendiente' }
   if (new Date(fechaEntrega) < new Date()) return { label: 'No entregado', cls: 'estado-no-entregado' }
   return { label: 'Pendiente', cls: 'estado-pendiente' }
@@ -245,7 +245,7 @@ onMounted(async () => {
   color: #155724;
 }
 
-.estado-revisado {
+.estado-desaprobado {
   background: #fff3cd;
   color: #856404;
 }

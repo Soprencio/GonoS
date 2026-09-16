@@ -63,7 +63,7 @@ async function descargar() {
         :class="{
           'status-pending': entrega.estado === 'Pendiente',
           'status-review': entrega.estado === 'En revisión',
-          'status-done': entrega.estado === 'Revisado' || entrega.estado === 'Aprobado'
+          'status-done': entrega.estado === 'Desaprobado' || entrega.estado === 'Aprobado'
         }"
       >
         {{ entrega.estado }}
