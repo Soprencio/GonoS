@@ -67,6 +67,7 @@ defineExpose({
   resetCamera: viewer.resetCamera,
   isolateSelection: viewer.isolateSelection,
   showAll: viewer.showAll,
+  selectUuid: viewer.selectUuid,
   extractHierarchy: viewer.extractHierarchy,
   deselectAll: viewer.deselectAll,
   getCanvasRect: viewer.getCanvasRect,

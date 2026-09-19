@@ -28,11 +28,14 @@ defineEmits(['click'])
   border-radius: var(--radius-md);
   padding: 20px;
   cursor: pointer;
-  transition: box-shadow var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  animation: card-in 0.45s ease both;
 }
 
 .class-card:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-accent);
 }
 
 .card-header {

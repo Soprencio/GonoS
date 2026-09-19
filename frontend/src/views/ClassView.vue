@@ -214,9 +214,10 @@ onMounted(async () => {
 
             <div v-if="publicaciones.length > 0" class="pub-list">
               <article
-                v-for="pub in publicaciones"
+                v-for="(pub, i) in publicaciones"
                 :key="pub.publicacion_id"
                 class="pub-card"
+                :style="{ animationDelay: i * 45 + 'ms' }"
               >
                 <div class="pub-header">
                   <span class="pub-author">{{ pub.profesor }}</span>
@@ -238,10 +239,11 @@ onMounted(async () => {
             <p v-if="trabajos.length === 0" class="empty">Todavía no hay trabajos en esta clase.</p>
             <div v-else class="trabajos-list">
               <AssignmentCard
-                v-for="t in trabajos"
+                v-for="(t, i) in trabajos"
                 :key="t.tp_id"
                 :trabajo="t"
                 :isTeacher="isTeacher"
+                :style="{ animationDelay: i * 45 + 'ms' }"
                 @click="goToTrabajo(t.tp_id)"
               />
             </div>
@@ -259,10 +261,11 @@ onMounted(async () => {
             <p v-if="trabajos.length === 0" class="empty">Todavía no hay trabajos en esta clase.</p>
             <div v-else class="trabajos-list">
               <AssignmentCard
-                v-for="t in trabajos"
+                v-for="(t, i) in trabajos"
                 :key="t.tp_id"
                 :trabajo="t"
                 :isTeacher="isTeacher"
+                :style="{ animationDelay: i * 45 + 'ms' }"
                 @click="goToTrabajo(t.tp_id)"
               />
             </div>
@@ -278,9 +281,10 @@ onMounted(async () => {
               <div class="part-group">
                 <h3 class="part-group-title">Creador</h3>
                 <div
-                  v-for="p in participantes.creador"
+                  v-for="(p, i) in participantes.creador"
                   :key="p.participacion_id"
                   class="part-card"
+                  :style="{ animationDelay: i * 45 + 'ms' }"
                 >
                   <div class="part-info">
                     <span class="part-name">{{ p.nombre }} {{ p.apellido }}</span>
@@ -293,9 +297,10 @@ onMounted(async () => {
               <div class="part-group">
                 <h3 class="part-group-title">Profesores</h3>
                 <div
-                  v-for="p in participantes.profesores"
+                  v-for="(p, i) in participantes.profesores"
                   :key="p.participacion_id"
                   class="part-card"
+                  :style="{ animationDelay: i * 45 + 'ms' }"
                 >
                   <div class="part-info">
                     <span class="part-name">{{ p.nombre }} {{ p.apellido }}</span>
@@ -313,9 +318,10 @@ onMounted(async () => {
               <div class="part-group">
                 <h3 class="part-group-title">Alumnos <span class="part-count">({{ participantes.alumnos.length }})</span></h3>
                 <div
-                  v-for="p in participantes.alumnos"
+                  v-for="(p, i) in participantes.alumnos"
                   :key="p.participacion_id"
                   class="part-card"
+                  :style="{ animationDelay: i * 45 + 'ms' }"
                 >
                   <div class="part-info">
                     <button
@@ -487,8 +493,17 @@ onMounted(async () => {
 
 .pub-card {
   background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 14px 18px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  animation: card-in 0.45s ease both;
+}
+
+.pub-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-accent);
 }
 
 .pub-header {
@@ -583,6 +598,13 @@ onMounted(async () => {
   border-radius: var(--radius-sm);
   background: var(--color-bg-subtle);
   margin-bottom: 4px;
+  animation: card-in 0.45s ease both;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.part-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
 }
 
 .part-info {

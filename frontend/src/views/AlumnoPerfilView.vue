@@ -111,9 +111,10 @@ onMounted(async () => {
           <p v-if="trabajos.length === 0" class="empty">Este alumno no tiene trabajos asignados.</p>
           <div v-else class="trabajos-list">
             <div
-              v-for="t in trabajos"
+              v-for="(t, i) in trabajos"
               :key="t.tp_id"
               class="trabajo-card"
+              :style="{ animationDelay: i * 45 + 'ms' }"
             >
               <div class="trabajo-header">
                 <span class="trabajo-desc">{{ t.descripcion }}</span>
@@ -215,6 +216,13 @@ onMounted(async () => {
   background: var(--color-bg-subtle);
   border-radius: var(--radius-md);
   padding: 14px 18px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  animation: card-in 0.45s ease both;
+}
+
+.trabajo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
 }
 
 .trabajo-header {

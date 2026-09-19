@@ -538,13 +538,33 @@ export function useViewer(canvasRef) {
     }
   }
 
+  function selectUuid(id) {
+    if (!id) {
+      deselectAll()
+      return
+    }
+    let found = null
+    modelGroup.traverse(child => {
+      if (!found && child.uuid === id) found = child
+    })
+    if (found) selectObject(found)
+  }
+
   function isolateSelection() {
     if (!selectedObject.value) return
     hiddenObjects = []
     const selected = selectedObject.value
+    const keep = new Set()
+    if (selected.isMesh) {
+      keep.add(selected)
+    } else if (selected.traverse) {
+      selected.traverse(child => {
+        if (child.isMesh) keep.add(child)
+      })
+    }
 
     modelGroup.traverse(child => {
-      if (child !== selected && child.isMesh) {
+      if (child.isMesh && !keep.has(child)) {
         child.visible = false
         hiddenObjects.push(child)
       }
@@ -666,6 +686,7 @@ export function useViewer(canvasRef) {
     selectedObject,
     modelInfo,
     selectObject,
+    selectUuid,
     deselectAll,
     isolateSelection,
     showAll,

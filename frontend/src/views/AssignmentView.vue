@@ -182,9 +182,10 @@ onMounted(async () => {
 
           <div class="comentarios-list">
             <div
-              v-for="c in comentariosPublicos"
+              v-for="(c, i) in comentariosPublicos"
               :key="c.id"
               :class="['comentario-card', { 'profesor-comentario': c.esProfesor }]"
+              :style="{ animationDelay: i * 45 + 'ms' }"
             >
               <div class="comentario-header">
                 <span class="comentario-autor">{{ c.autor }}</span>
@@ -382,11 +383,18 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   padding: 12px 16px;
   border-left: 3px solid transparent;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  animation: card-in 0.45s ease both;
 }
 
 .comentario-card.profesor-comentario {
   border-left-color: var(--color-accent);
   background: var(--color-bg-elevated);
+}
+
+.comentario-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
 }
 
 .comentario-header {

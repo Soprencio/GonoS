@@ -207,6 +207,7 @@ function onPinClick(id) {
 
 function onSelect(id) {
   selectedId.value = id
+  viewerRef.value?.selectUuid?.(id)
   if (is3DFormat.value) rightTab.value = 'propiedades'
 }
 

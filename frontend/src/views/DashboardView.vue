@@ -129,9 +129,10 @@ onMounted(fetchClases)
       </div>
       <div v-else class="grid">
         <ClassCard
-          v-for="c in clases"
+          v-for="(c, i) in clases"
           :key="c.clase_id"
           :clase="c"
+          :style="{ animationDelay: i * 45 + 'ms' }"
           @click="goToClass(c.clase_id)"
         />
       </div>
