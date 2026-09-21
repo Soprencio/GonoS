@@ -89,6 +89,9 @@ defineExpose({
       <button class="secondary" @click="viewer.toggleCamera()" title="Alternar vista perspectiva/ortogonal">
         {{ viewer.cameraType.value === 'perspective' ? 'Flat' : 'Persp' }}
       </button>
+      <button class="secondary" @click="viewer.setCameraPreset('isometric')" title="Vista isométrica (alineación óptica)">
+        ISO
+      </button>
     </div>
 
     <div ref="wrapperRef" class="canvas-wrapper">

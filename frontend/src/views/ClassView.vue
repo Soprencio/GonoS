@@ -2,17 +2,26 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useConfirm } from '../composables/useConfirm.js'
+import { useDevTools } from '../composables/useDevTools.js'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import AssignmentCard from '../components/AssignmentCard.vue'
 import AssignmentFormView from './AssignmentFormView.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
+const toast = useToast()
+const { confirm } = useConfirm()
+const { state: devState } = useDevTools()
 
 const clase = ref(null)
 const trabajos = ref([])
 const publicaciones = ref([])
 const loading = ref(true)
+const isLoading = computed(() => loading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 const error = ref('')
 const copied = ref(false)
 const showForm = ref(false)
@@ -30,6 +39,7 @@ const canPost = computed(() =>
 
 const participantes = ref({ creador: [], profesores: [], alumnos: [] })
 const participantesLoading = ref(false)
+const isParticipantesLoading = computed(() => participantesLoading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 
 function puedeSacar(rol) {
   const miRol = clase.value?.rol
@@ -51,12 +61,21 @@ async function fetchParticipantes() {
 }
 
 async function sacarParticipante(participacionId) {
-  if (!confirm('¿Estás seguro de que querés sacar a este participante?')) return
+  const ok = await confirm({
+    title: 'Sacar participante',
+    message: '¿Estás seguro de que querés sacar a este participante de la clase?',
+    confirmText: 'Sacar',
+    cancelText: 'Cancelar',
+    danger: true
+  })
+  if (!ok) return
+
   try {
     await api.delete(`/clases/${route.params.id}/participantes/${participacionId}`)
     await fetchParticipantes()
+    toast.success('Participante sacado de la clase')
   } catch (err) {
-    alert(err.response?.data?.error || 'Error al sacar participante')
+    toast.error(err.response?.data?.error || 'Error al sacar participante')
   }
 }
 
@@ -81,6 +100,7 @@ async function copyCode() {
   try {
     await navigator.clipboard.writeText(clase.value.codigo)
     copied.value = true
+    toast.success('Código de invitación copiado al portapapeles')
     setTimeout(() => { copied.value = false }, 2000)
   } catch {
     const textarea = document.createElement('textarea')
@@ -90,6 +110,7 @@ async function copyCode() {
     document.execCommand('copy')
     document.body.removeChild(textarea)
     copied.value = true
+    toast.success('Código de invitación copiado al portapapeles')
     setTimeout(() => { copied.value = false }, 2000)
   }
 }
@@ -120,8 +141,9 @@ async function postPublicacion() {
     const res = await api.post(`/clases/${route.params.id}/publicaciones`, { mensaje: msg })
     publicaciones.value.unshift(res.data)
     nuevoMensaje.value = ''
+    toast.success('Publicación creada con éxito')
   } catch (err) {
-    alert(err.response?.data?.error || 'Error al publicar')
+    toast.error(err.response?.data?.error || 'Error al publicar')
   } finally {
     posting.value = false
   }
@@ -155,12 +177,31 @@ onMounted(async () => {
 
 <template>
   <div class="class-view">
-    <div v-if="loading" class="state-msg">Cargando...</div>
+    <div v-if="isLoading" class="class-skeleton-wrapper" aria-hidden="true">
+      <div class="skeleton-header">
+        <SkeletonBlock width="80px" height="34px" />
+        <SkeletonBlock width="45%" height="32px" />
+      </div>
+      <div class="skeleton-topbar">
+        <SkeletonBlock width="90px" height="36px" />
+        <SkeletonBlock width="90px" height="36px" />
+        <SkeletonBlock width="110px" height="36px" />
+      </div>
+      <div class="skeleton-body">
+        <SkeletonBlock width="100%" height="80px" border-radius="var(--radius-md)" />
+        <SkeletonBlock width="100%" height="160px" border-radius="var(--radius-md)" />
+      </div>
+    </div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <template v-else-if="clase">
       <header class="header">
-        <button class="secondary" @click="router.push('/')">← Volver</button>
-        <h1 class="title">{{ clase.nombre }}</h1>
+        <div class="header-left">
+          <button class="secondary" @click="router.push('/')">← Volver</button>
+          <h1 class="title">{{ clase.nombre }}</h1>
+        </div>
+        <div class="header-right">
+          <ThemeToggle />
+        </div>
       </header>
 
       <nav class="topbar">
@@ -275,7 +316,13 @@ onMounted(async () => {
         <!-- PARTICIPANTES -->
         <template v-if="activeTab === 'participantes'">
           <section class="participantes-section">
-            <div v-if="participantesLoading" class="loading-text">Cargando participantes...</div>
+            <div v-if="isParticipantesLoading" class="part-skeleton-group" aria-hidden="true">
+              <SkeletonBlock width="120px" height="20px" style="margin-bottom: 12px" />
+              <div v-for="n in 3" :key="n" class="part-card-skeleton">
+                <SkeletonBlock width="45%" height="16px" />
+                <SkeletonBlock width="30%" height="12px" />
+              </div>
+            </div>
             <template v-else>
               <!-- CREADOR -->
               <div class="part-group">
@@ -364,9 +411,21 @@ onMounted(async () => {
 .header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
 }
 
 .title {
@@ -379,10 +438,11 @@ onMounted(async () => {
 .topbar {
   display: flex;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-elevated);
   position: sticky;
   top: 0;
   z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .tab-btn {
@@ -409,20 +469,26 @@ onMounted(async () => {
 
 .content {
   flex: 1;
-  padding: 24px;
-  max-width: 720px;
-  width: 100%;
-  margin: 0 auto;
+  padding: 32px;
+  max-width: 780px;
+  width: calc(100% - 48px);
+  margin: 28px auto 60px;
   box-sizing: border-box;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
 }
 
 .desc {
   color: var(--color-text-muted);
   margin: 0 0 24px;
+  line-height: 1.5;
 }
 
 .code-section {
   background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   margin-bottom: 32px;
@@ -663,5 +729,55 @@ onMounted(async () => {
 
 .error {
   color: var(--color-danger);
+}
+
+/* Skeletons en ClassView */
+.class-skeleton-wrapper {
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.skeleton-topbar {
+  display: flex;
+  gap: 12px;
+}
+
+.skeleton-body {
+  max-width: 780px;
+  width: calc(100% - 48px);
+  margin: 28px auto 60px;
+  box-sizing: border-box;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 32px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.part-skeleton-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.part-card-skeleton {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

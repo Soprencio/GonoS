@@ -144,7 +144,7 @@ export function useViewer(canvasRef) {
   let animProgress = 0
   const ANIM_DURATION = 20
 
-  function setViewDirection(dir) {
+  function setViewDirection(dir, upVector = new THREE.Vector3(0, 1, 0)) {
     const target = controls.target
     const box = new THREE.Box3().setFromObject(modelGroup)
     const size = box.getSize(new THREE.Vector3())
@@ -154,11 +154,23 @@ export function useViewer(canvasRef) {
     const direction = new THREE.Vector3(dir.x, dir.y, dir.z).normalize()
     const targetPos = target.clone().add(direction.multiplyScalar(distance))
 
+    camera.up.copy(upVector)
+    controls.object.up.copy(upVector)
+
     animTargetPos = targetPos
     animTargetQuat = new THREE.Quaternion().setFromRotationMatrix(
-      new THREE.Matrix4().lookAt(targetPos, target, new THREE.Vector3(0, 1, 0))
+      new THREE.Matrix4().lookAt(targetPos, target, upVector)
     )
     animProgress = 0
+  }
+
+  function setCameraPreset(preset) {
+    if (preset === 'isometric') {
+      if (camera !== orthoCamera) {
+        toggleCamera()
+      }
+      setViewDirection({ x: -1, y: -1, z: 1 })
+    }
   }
 
   function updateCameraAnimation() {
@@ -701,6 +713,7 @@ export function useViewer(canvasRef) {
     onViewChange,
     toggleCamera,
     setViewDirection,
+    setCameraPreset,
     cameraType
   }
 }

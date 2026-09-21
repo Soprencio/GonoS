@@ -13,6 +13,7 @@
 
   --color-danger:        #C0392B;
   --color-success:       #2E7D32;
+  --color-white:         #FFFFFF;
 
   --color-scrollbar-thumb: var(--color-accent);
   --color-scrollbar-track: transparent;
@@ -41,6 +42,7 @@
 
   --color-danger:        #E57373;
   --color-success:       #66BB6A;
+  --color-white:         #FFFFFF;
 
   --color-scrollbar-thumb: var(--color-accent);
   --color-scrollbar-track: transparent;
@@ -109,4 +111,34 @@ input:focus, textarea:focus, select:focus {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Skeletons y animación Shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-subtle) 25%,
+    var(--color-border) 50%,
+    var(--color-bg-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-title {
+  height: 20px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-sm);
 }

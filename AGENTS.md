@@ -4,6 +4,8 @@
 
 **GonoS** — Plataforma web tipo "Classroom" para entrega y revisión de trabajos de Diseño, Arquitectura y Matemática. Los alumnos suben modelos 3D (`.obj`, `.stl`, `.gltf`, `.glb`, `.ifc`, `.fbx` condicional) y archivos vectoriales (`.svg`), y los docentes los visualizan directamente en el navegador (sin descargar ni instalar software) para dejar anotaciones ancladas a puntos específicos del modelo.
 
+> Para el contexto integral de arquitectura, base de datos MariaDB y plan maestro de UX/UI, consultar `GONOS_MASTER_CONTEXT.md`.
+
 Repositorio con dos proyectos hermanos:
 ```
 proyecto/

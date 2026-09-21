@@ -2,19 +2,26 @@
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useDevTools } from '../composables/useDevTools.js'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import Viewer3D from '../components/viewer/Viewer3D.vue'
 import SvgViewer2D from '../components/viewer/SvgViewer2D.vue'
 import ElementTree from '../components/viewer/ElementTree.vue'
 import ElementInfo from '../components/viewer/ElementInfo.vue'
 import AnnotationPin from '../components/viewer/AnnotationPin.vue'
 import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
+const toast = useToast()
+const { state: devState } = useDevTools()
 
 const entrega = ref(null)
 const loading = ref(true)
+const isLoading = computed(() => loading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 const error = ref('')
 const blobUrl = ref('')
 const mtlUrl = ref('')
@@ -27,6 +34,7 @@ const is3DReady = ref(false)
 
 const comentarios = ref([])
 const comentariosLoading = ref(false)
+const isComentariosLoading = computed(() => comentariosLoading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 const activeCommentId = ref(null)
 
 const annotating = ref(false)
@@ -117,7 +125,7 @@ async function fetchComentarios() {
 async function saveNota() {
   const nota = parseFloat(notaInput.value)
   if (isNaN(nota) || nota < 0 || nota > 10) {
-    alert('La nota debe ser un número entre 0 y 10')
+    toast.error('La nota debe ser un número entre 0 y 10')
     return
   }
   savingNota.value = true
@@ -127,8 +135,9 @@ async function saveNota() {
       entrega.value.nota = res.data.nota
       entrega.value.estado = res.data.estado
     }
+    toast.success('Nota guardada correctamente')
   } catch (err) {
-    alert(err.response?.data?.error || 'Error al guardar la nota')
+    toast.error(err.response?.data?.error || 'Error al guardar la nota')
   } finally {
     savingNota.value = false
   }
@@ -137,15 +146,16 @@ async function saveNota() {
 async function calificar() {
   const nota = parseFloat(notaInput.value)
   if (isNaN(nota) || nota < 0 || nota > 10) {
-    alert('La nota debe ser un número entre 0 y 10')
+    toast.error('La nota debe ser un número entre 0 y 10')
     return
   }
   savingNota.value = true
   try {
     await api.patch(`/entregas/${route.params.id}/nota`, { nota })
+    toast.success('Nota guardada correctamente')
     router.go(-1)
   } catch (err) {
-    alert(err.response?.data?.error || 'Error al guardar la nota')
+    toast.error(err.response?.data?.error || 'Error al guardar la nota')
     savingNota.value = false
   }
 }
@@ -169,9 +179,11 @@ async function savePendingPin() {
     await api.post(`/entregas/${route.params.id}/comentarios`, payload)
     pendingPin.value = null
     await fetchComentarios()
+    toast.success('Anotación agregada')
   } catch (err) {
     pin.error = err.response?.data?.error || 'Error al guardar'
     pin.saving = false
+    toast.error(pin.error)
   }
 }
 
@@ -184,8 +196,9 @@ async function deleteComment(id) {
     await api.delete(`/comentarios/${id}`)
     await fetchComentarios()
     if (activeCommentId.value === id) activeCommentId.value = null
+    toast.success('Comentario eliminado')
   } catch {
-    alert('Error al eliminar comentario')
+    toast.error('Error al eliminar comentario')
   }
 }
 
@@ -286,7 +299,37 @@ onUnmounted(() => {
 
 <template>
   <div class="review-view">
-    <div v-if="loading" class="state-msg">Cargando...</div>
+    <div v-if="isLoading" class="review-skeleton-wrapper" aria-hidden="true">
+      <div class="skeleton-header">
+        <SkeletonBlock width="80px" height="34px" />
+        <SkeletonBlock width="35%" height="32px" />
+      </div>
+      <div class="skeleton-main-layout">
+        <div class="skeleton-left-col">
+          <SkeletonBlock width="70%" height="20px" />
+          <SkeletonBlock width="100%" height="28px" />
+          <SkeletonBlock width="100%" height="28px" />
+          <SkeletonBlock width="100%" height="28px" />
+        </div>
+        <div class="skeleton-center-col">
+          <div class="skeleton-3d-box">
+            <div class="loader-orbit">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="spinner-3d">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+            </div>
+            <p>Cargando entorno de revisión...</p>
+          </div>
+        </div>
+        <div class="skeleton-right-col">
+          <SkeletonBlock width="80%" height="22px" />
+          <SkeletonBlock width="100%" height="60px" border-radius="var(--radius-sm)" />
+          <SkeletonBlock width="100%" height="60px" border-radius="var(--radius-sm)" />
+        </div>
+      </div>
+    </div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <template v-else-if="entrega">
       <header class="header">
@@ -338,6 +381,7 @@ onUnmounted(() => {
             {{ annotating ? 'Cancelar anotación' : 'Agregar anotación' }}
           </button>
           <span v-if="isProfesor && annotating" class="hint-btn">Hacé clic en el modelo para colocar un pin</span>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -455,7 +499,12 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div v-if="comentariosLoading" class="loading-msg">Cargando comentarios...</div>
+            <div v-if="isComentariosLoading" class="comentarios-skeleton" aria-hidden="true">
+              <div v-for="n in 3" :key="n" class="comentario-skeleton-card">
+                <SkeletonBlock width="40%" height="14px" />
+                <SkeletonBlock width="85%" height="12px" />
+              </div>
+            </div>
             <AnnotationPanel
               v-else
               :comentarios="comentarios"
@@ -488,6 +537,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--color-bg);
 }
 
 .header {
@@ -837,8 +887,94 @@ button.small {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #ff6600;
-  border: 2px solid #fff;
+  background: var(--color-accent);
+  border: 2px solid var(--color-bg-elevated);
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+
+/* Skeletons en ReviewView */
+.review-skeleton-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.review-skeleton-wrapper .skeleton-header {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--color-bg-elevated);
+}
+
+.skeleton-main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.skeleton-left-col {
+  width: 240px;
+  padding: 20px;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--color-bg-elevated);
+}
+
+.skeleton-center-col {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-subtle);
+}
+
+.skeleton-3d-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.spinner-3d {
+  color: var(--color-accent);
+  animation: spin-3d 3s linear infinite;
+}
+
+@keyframes spin-3d {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.skeleton-right-col {
+  width: 300px;
+  padding: 20px;
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--color-bg-elevated);
+}
+
+.comentarios-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.comentario-skeleton-card {
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

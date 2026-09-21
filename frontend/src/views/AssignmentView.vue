@@ -2,15 +2,22 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useDevTools } from '../composables/useDevTools.js'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 import SubmissionRow from '../components/SubmissionRow.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
+const toast = useToast()
+const { state: devState } = useDevTools()
 
 const trabajo = ref(null)
 const entregas = ref([])
 const loading = ref(true)
+const isLoading = computed(() => loading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 const error = ref('')
 
 const comentariosPublicos = ref([])
@@ -59,8 +66,9 @@ async function postComentario() {
     const res = await api.post(`/trabajos/${route.params.id}/comentarios-publicos`, { mensaje: msg })
     comentariosPublicos.value.push(res.data)
     nuevoComentario.value = ''
+    toast.success('Comentario publicado')
   } catch (err) {
-    alert(err.response?.data?.error || 'Error al enviar comentario')
+    toast.error(err.response?.data?.error || 'Error al enviar comentario')
   } finally {
     postingComentario.value = false
   }
@@ -91,75 +99,103 @@ onMounted(async () => {
 
 <template>
   <div class="assignment-view">
-    <div v-if="loading" class="state-msg">Cargando...</div>
+    <div v-if="isLoading" class="assignment-skeleton-wrapper" aria-hidden="true">
+      <div class="skeleton-header">
+        <SkeletonBlock width="130px" height="34px" />
+        <SkeletonBlock width="40%" height="28px" />
+      </div>
+      <div class="skeleton-sections">
+        <div class="skeleton-card-box">
+          <SkeletonBlock width="120px" height="20px" />
+          <SkeletonBlock width="85%" height="16px" />
+          <SkeletonBlock width="65%" height="16px" />
+        </div>
+        <div class="skeleton-card-box">
+          <SkeletonBlock width="140px" height="20px" />
+          <SkeletonBlock width="200px" height="16px" />
+        </div>
+      </div>
+    </div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <template v-else-if="trabajo">
       <header class="header">
-        <button class="secondary" @click="router.push(`/clase/${trabajo.clase_id}`)">← Volver a la clase</button>
-        <h1 class="title">Trabajo práctico</h1>
+        <div class="header-left">
+          <button class="secondary" @click="router.push(`/clase/${trabajo.clase_id}`)">← Volver a la clase</button>
+          <h1 class="title">Trabajo práctico</h1>
+        </div>
+        <div class="header-right">
+          <ThemeToggle />
+        </div>
       </header>
 
       <main class="content">
         <p v-if="entregadoMsg" class="success-msg">{{ entregadoMsg }}</p>
 
-        <p class="clase-name">{{ trabajo.clase_nombre }}</p>
+        <!-- TARJETA PRINCIPAL DEL TRABAJO (RECUADRO DE TEXTOS) -->
+        <article class="assignment-card-box">
+          <p class="clase-name">{{ trabajo.clase_nombre }}</p>
 
-        <section class="section">
-          <h2>Consigna</h2>
-          <p class="consigna">{{ trabajo.descripcion }}</p>
-        </section>
-
-        <section class="section">
-          <h2>Fecha de entrega</h2>
-          <p class="due-date">{{ formatDate(trabajo.fecha_entrega) }}</p>
-        </section>
-
-        <section class="section">
-          <h2>Formatos aceptados</h2>
-          <div class="formats">
-            <span
-              v-for="fmt in (trabajo.formatos_aceptados || [])"
-              :key="fmt"
-              class="format-badge"
-            >{{ fmt }}</span>
+          <div class="consigna-group">
+            <span class="group-label">Consigna</span>
+            <div class="consigna-box">
+              <p class="consigna">{{ trabajo.descripcion }}</p>
+            </div>
           </div>
-        </section>
 
-        <section class="section">
-          <h2>Nota mínima de aprobación</h2>
-          <p class="due-date">{{ notaMinima }}</p>
-        </section>
+          <div class="meta-grid">
+            <div class="meta-item">
+              <span class="meta-label">Fecha de entrega</span>
+              <p class="due-date">{{ formatDate(trabajo.fecha_entrega) }}</p>
+            </div>
 
-        <!-- Alumno -->
-        <div v-if="trabajo.rol === 'Alumno'" class="actions">
-          <button
-            v-if="!trabajo.asignacion?.entrega_id"
-            class="primary"
-            @click="router.push(`/trabajo/${route.params.id}/nueva-entrega`)"
-          >
-            Entregar trabajo
-          </button>
-          <button
-            v-else
-            class="secondary"
-            @click="router.push(`/entrega/${trabajo.asignacion.entrega_id}/revisar`)"
-          >
-            Ver mi entrega
-          </button>
-          <p class="estado-info">
-            Estado: <strong>{{ trabajo.asignacion?.estado || 'Sin estado' }}</strong>
-            <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0">
-              — Nota: {{ trabajo.asignacion.nota }}
-              <span :class="trabajo.asignacion.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
-                ({{ trabajo.asignacion.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
+            <div class="meta-item">
+              <span class="meta-label">Formatos aceptados</span>
+              <div class="formats">
+                <span
+                  v-for="fmt in (trabajo.formatos_aceptados || [])"
+                  :key="fmt"
+                  class="format-badge"
+                >{{ fmt }}</span>
+              </div>
+            </div>
+
+            <div class="meta-item">
+              <span class="meta-label">Nota mínima</span>
+              <p class="due-date">{{ notaMinima }}</p>
+            </div>
+          </div>
+
+          <!-- Alumno: Acciones de entrega -->
+          <div v-if="trabajo.rol === 'Alumno'" class="actions">
+            <button
+              v-if="!trabajo.asignacion?.entrega_id"
+              class="primary"
+              @click="router.push(`/trabajo/${route.params.id}/nueva-entrega`)"
+            >
+              Entregar trabajo
+            </button>
+            <button
+              v-else
+              class="secondary"
+              @click="router.push(`/entrega/${trabajo.asignacion.entrega_id}/revisar`)"
+            >
+              Ver mi entrega
+            </button>
+            <p class="estado-info">
+              Estado: <strong>{{ trabajo.asignacion?.estado || 'Sin estado' }}</strong>
+              <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0">
+                — Nota: {{ trabajo.asignacion.nota }}
+                <span :class="trabajo.asignacion.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
+                  ({{ trabajo.asignacion.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
+                </span>
               </span>
-            </span>
-          </p>
-        </div>
+            </p>
+          </div>
+        </article>
 
-        <!-- Profesor: tabla de entregas -->
-        <div v-if="isTeacher" class="entregas-section">
-          <h2>Entregas</h2>
+        <!-- Profesor: tabla de entregas recuadrada -->
+        <div v-if="isTeacher" class="entregas-card-box">
+          <h2 class="card-section-title">Entregas de alumnos</h2>
           <div v-if="entregas.length === 0" class="empty">Todavía no hay entregas.</div>
           <table v-else class="entregas-table">
             <thead>
@@ -176,9 +212,9 @@ onMounted(async () => {
           </table>
         </div>
 
-        <!-- COMENTARIOS PÚBLICOS -->
-        <section class="comentarios-section">
-          <h2>Comentarios</h2>
+        <!-- COMENTARIOS PÚBLICOS RECUADRADOS -->
+        <section class="comentarios-card-box">
+          <h2 class="card-section-title">Comentarios públicos</h2>
 
           <div class="comentarios-list">
             <div
@@ -228,9 +264,21 @@ onMounted(async () => {
 .header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
 }
 
 .title {
@@ -241,29 +289,57 @@ onMounted(async () => {
 
 .content {
   flex: 1;
-  padding: 24px;
-  max-width: 800px;
+  padding: 28px 16px 60px;
+  max-width: 780px;
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
 }
 
+.assignment-card-box,
+.entregas-card-box,
+.comentarios-card-box {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 28px 32px;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 24px;
+}
+
 .clase-name {
   color: var(--color-accent);
   font-size: 0.9rem;
-  margin: 0 0 24px;
+  font-weight: 500;
+  margin: 0 0 18px;
 }
 
-.section {
-  margin-bottom: 28px;
+.card-section-title {
+  font-size: 1.1rem;
+  color: var(--color-text);
+  margin: 0 0 20px;
+  font-weight: 600;
 }
 
-.section h2 {
-  font-size: 0.85rem;
+.consigna-group {
+  margin-bottom: 20px;
+}
+
+.group-label {
+  font-size: 0.8rem;
   color: var(--color-text-muted);
-  margin: 0 0 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.consigna-box {
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 16px 18px;
 }
 
 .consigna {
@@ -271,12 +347,37 @@ onMounted(async () => {
   line-height: 1.6;
   white-space: pre-wrap;
   margin: 0;
+  font-size: 0.95rem;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.meta-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .due-date {
   color: var(--color-text);
   margin: 0;
   font-weight: 500;
+  font-size: 0.92rem;
 }
 
 .formats {
@@ -289,6 +390,7 @@ onMounted(async () => {
   padding: 4px 12px;
   border-radius: 10px;
   background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   color: var(--color-text);
   font-size: 0.85rem;
   font-family: monospace;
@@ -305,9 +407,11 @@ onMounted(async () => {
 }
 
 .actions {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--color-border);
+  margin-top: 24px;
+  padding: 18px 20px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .actions button {
@@ -318,16 +422,6 @@ onMounted(async () => {
   font-size: 0.9rem;
   color: var(--color-text-muted);
   margin: 0;
-}
-
-.entregas-section {
-  margin-top: 40px;
-}
-
-.entregas-section h2 {
-  font-size: 1rem;
-  color: var(--color-text);
-  margin: 0 0 16px;
 }
 
 .empty {
@@ -359,18 +453,6 @@ onMounted(async () => {
 }
 
 /* COMENTARIOS PÚBLICOS */
-.comentarios-section {
-  margin-top: 40px;
-  padding-top: 24px;
-  border-top: 1px solid var(--color-border);
-}
-
-.comentarios-section h2 {
-  font-size: 1rem;
-  color: var(--color-text);
-  margin: 0 0 16px;
-}
-
 .comentarios-list {
   display: flex;
   flex-direction: column;
@@ -380,6 +462,7 @@ onMounted(async () => {
 
 .comentario-card {
   background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 12px 16px;
   border-left: 3px solid transparent;
@@ -463,7 +546,7 @@ onMounted(async () => {
 }
 
 .aprobado {
-  color: var(--color-success, #2e7d32);
+  color: var(--color-success);
   font-weight: 600;
 }
 
@@ -480,5 +563,35 @@ onMounted(async () => {
 
 .error {
   color: var(--color-danger);
+}
+
+/* Skeletons en AssignmentView */
+.assignment-skeleton-wrapper {
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.skeleton-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skeleton-card-box {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 </style>

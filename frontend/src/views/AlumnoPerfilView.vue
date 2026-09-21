@@ -2,14 +2,19 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
+import { useDevTools } from '../composables/useDevTools.js'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
 const api = useApi()
+const { state: devState } = useDevTools()
 
 const alumno = ref(null)
 const trabajos = ref([])
 const loading = ref(true)
+const isLoading = computed(() => loading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 const error = ref('')
 const esDocente = ref(false)
 
@@ -85,18 +90,35 @@ onMounted(async () => {
 
 <template>
   <div class="perfil-view">
-    <div v-if="loading" class="state-msg">Cargando...</div>
+    <div v-if="isLoading" class="perfil-skeleton-wrapper" aria-hidden="true">
+      <div class="skeleton-header">
+        <SkeletonBlock width="80px" height="34px" />
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+          <SkeletonBlock width="40%" height="26px" />
+          <SkeletonBlock width="25%" height="16px" />
+        </div>
+      </div>
+      <div class="skeleton-body">
+        <SkeletonBlock width="100%" height="90px" border-radius="var(--radius-sm)" />
+        <SkeletonBlock width="100%" height="90px" border-radius="var(--radius-sm)" />
+      </div>
+    </div>
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <template v-else>
       <header class="header">
-        <button class="secondary" @click="router.back()">← Volver</button>
-        <div v-if="alumno" class="header-info">
-          <h1 class="title">{{ alumno.nombre }} {{ alumno.apellido }}</h1>
-          <p class="subtitle">{{ alumno.mail }}</p>
+        <div class="header-left">
+          <button class="secondary" @click="router.back()">← Volver</button>
+          <div v-if="alumno" class="header-info">
+            <h1 class="title">{{ alumno.nombre }} {{ alumno.apellido }}</h1>
+            <p class="subtitle">{{ alumno.mail }}</p>
+          </div>
+          <div v-else class="header-info">
+            <h1 class="title">Alumno</h1>
+            <p class="subtitle">No encontrado</p>
+          </div>
         </div>
-        <div v-else class="header-info">
-          <h1 class="title">Alumno</h1>
-          <p class="subtitle">No encontrado</p>
+        <div class="header-right">
+          <ThemeToggle />
         </div>
       </header>
 
@@ -154,9 +176,21 @@ onMounted(async () => {
 .header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
 }
 
 .header-info {
@@ -181,6 +215,7 @@ onMounted(async () => {
   font-size: 0.85rem;
   color: var(--color-text-muted);
   background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 10px 14px;
   margin: 0 0 24px;
@@ -188,11 +223,15 @@ onMounted(async () => {
 
 .content {
   flex: 1;
-  padding: 24px;
-  max-width: 720px;
-  width: 100%;
-  margin: 0 auto;
+  padding: 32px;
+  max-width: 780px;
+  width: calc(100% - 48px);
+  margin: 28px auto 60px;
   box-sizing: border-box;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
 }
 
 .section-title {
@@ -214,6 +253,7 @@ onMounted(async () => {
 
 .trabajo-card {
   background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 14px 18px;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
@@ -293,11 +333,11 @@ onMounted(async () => {
 }
 
 .nota.aprobado-status {
-  color: #155724;
+  color: var(--color-success);
 }
 
 .nota.desaprobado-status {
-  color: #721c24;
+  color: var(--color-danger);
 }
 
 .nota-label {
@@ -308,13 +348,13 @@ onMounted(async () => {
 }
 
 .nota-label.aprobado {
-  background: #d4edda;
-  color: #155724;
+  background: var(--color-accent-soft);
+  color: var(--color-success);
 }
 
 .nota-label.desaprobado {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--color-bg-subtle);
+  color: var(--color-danger);
 }
 
 .state-msg {
@@ -325,5 +365,25 @@ onMounted(async () => {
 
 .error {
   color: var(--color-danger);
+}
+
+/* Skeletons en AlumnoPerfilView */
+.perfil-skeleton-wrapper {
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.perfil-skeleton-wrapper .skeleton-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.perfil-skeleton-wrapper .skeleton-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 </style>

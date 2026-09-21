@@ -65,15 +65,16 @@ function formatDate(iso) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
-  background: var(--color-bg-elevated);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  background: var(--color-bg-subtle);
   animation: card-in 0.45s ease both;
 }
 
 .assignment-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
   border-color: var(--color-accent);
+  background: var(--color-bg-elevated);
 }
 
 .card-body {
