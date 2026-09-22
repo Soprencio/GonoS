@@ -10,6 +10,7 @@ import AssignmentCard from '../components/AssignmentCard.vue'
 import AssignmentFormView from './AssignmentFormView.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
+import CopyCodeBadge from '../components/CopyCodeBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -98,22 +99,35 @@ function formatDate(iso) {
 
 async function copyCode() {
   if (!clase.value?.codigo) return
+  const code = clase.value.codigo
   try {
-    await navigator.clipboard.writeText(clase.value.codigo)
-    copied.value = true
-    toast.success('Código de invitación copiado al portapapeles')
-    setTimeout(() => { copied.value = false }, 2000)
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(code)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = code
+      textarea.style.position = 'fixed'
+      textarea.style.left = '-999999px'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
   } catch {
     const textarea = document.createElement('textarea')
-    textarea.value = clase.value.codigo
+    textarea.value = code
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-999999px'
     document.body.appendChild(textarea)
+    textarea.focus()
     textarea.select()
     document.execCommand('copy')
     document.body.removeChild(textarea)
-    copied.value = true
-    toast.success('Código de invitación copiado al portapapeles')
-    setTimeout(() => { copied.value = false }, 2000)
   }
+  copied.value = true
+  toast.success(`Código de clase "${code}" copiado al portapapeles`)
+  setTimeout(() => { copied.value = false }, 2000)
 }
 
 async function fetchTrabajos() {
@@ -199,6 +213,7 @@ onMounted(async () => {
         <div class="header-left">
           <button class="secondary" @click="router.push('/')">← Volver</button>
           <h1 class="title">{{ clase.nombre }}</h1>
+          <CopyCodeBadge v-if="clase.codigo" :code="clase.codigo" size="md" />
         </div>
         <div class="header-right">
           <BackgroundToggle />
@@ -226,12 +241,29 @@ onMounted(async () => {
         <template v-if="activeTab === 'tablon'">
           <p v-if="clase.descripcion" class="desc">{{ clase.descripcion }}</p>
 
-          <div v-if="clase.codigo" class="code-section">
-            <p class="code-label">Código de invitación</p>
+          <div v-if="clase.codigo" class="code-section" title="Hacé clic para copiar el código" @click="copyCode">
+            <div class="code-info">
+              <span class="code-label tech-label">Código de invitación</span>
+              <span class="code-hint">Hacé clic para copiar y compartir con tus alumnos</span>
+            </div>
             <div class="code-row">
-              <code class="code">{{ clase.codigo }}</code>
-              <button class="secondary" @click="copyCode">
-                {{ copied ? '¡Copiado!' : 'Copiar' }}
+              <code class="code font-mono">{{ clase.codigo }}</code>
+              <button
+                type="button"
+                class="copy-btn secondary"
+                :class="{ copied }"
+                @click.stop="copyCode"
+              >
+                <span class="btn-icon">
+                  <svg v-if="copied" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                </span>
+                <span>{{ copied ? '¡Copiado!' : 'Copiar código' }}</span>
               </button>
             </div>
           </div>
@@ -427,7 +459,8 @@ onMounted(async () => {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .header-right {
@@ -503,29 +536,73 @@ onMounted(async () => {
   background: var(--color-bg-subtle-glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  padding: 16px 20px;
+  padding: 18px 22px;
   margin-bottom: 32px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.code-section:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--color-accent-soft);
+}
+
+.code-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .code-label {
-  margin: 0 0 8px;
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: 0.72rem;
   color: var(--color-text-muted);
+}
+
+.code-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-disabled);
 }
 
 .code-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .code {
-  font-size: 1.4rem;
-  font-weight: 600;
-  letter-spacing: 4px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 6px;
   color: var(--color-accent);
   background: transparent;
   padding: 0;
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  padding: 6px 14px;
+  transition: all var(--transition-fast);
+}
+
+.copy-btn.copied {
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
 }
 
 /* PUBLICACIONES */

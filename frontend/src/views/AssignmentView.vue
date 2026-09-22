@@ -9,6 +9,7 @@ import SubmissionRow from '../components/SubmissionRow.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
 import StatusPill from '../components/StatusPill.vue'
+import { formatDate, getRelativeTime, getUrgencyStatus, getLateInfo } from '../utils/dateUtils.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,16 +36,68 @@ const notaMinima = computed(() => {
   return isNaN(nm) ? 6 : nm
 })
 
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return new Intl.DateTimeFormat('es-AR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(d)
+const isAlumnoSubmitted = computed(() => {
+  return !!trabajo.value?.asignacion?.entrega_id
+})
+
+const relativeDueText = computed(() => {
+  if (!trabajo.value?.fecha_entrega) return ''
+  return getRelativeTime(trabajo.value.fecha_entrega, isAlumnoSubmitted.value)
+})
+
+const dueUrgency = computed(() => {
+  if (!trabajo.value?.fecha_entrega) return 'normal'
+  return getUrgencyStatus(trabajo.value.fecha_entrega, isAlumnoSubmitted.value)
+})
+
+const alumnoLateInfo = computed(() => {
+  const asig = trabajo.value?.asignacion
+  if (!asig?.fecha_entrega_alumno || !trabajo.value?.fecha_entrega) return null
+  return getLateInfo(asig.fecha_entrega_alumno, trabajo.value.fecha_entrega)
+})
+
+function exportToCSV() {
+  if (!entregas.value || entregas.value.length === 0) return
+
+  const headers = [
+    'Alumno',
+    'Email',
+    'Archivo entregado',
+    'Fecha de entrega',
+    'Puntualidad',
+    'Estado',
+    'Nota',
+    'Nota mínima'
+  ]
+
+  const rows = entregas.value.map(e => {
+    const alumno = `"${(e.alumno_nombre + ' ' + e.alumno_apellido).replace(/"/g, '""')}"`
+    const mail = `"${(e.alumno_mail || '').replace(/"/g, '""')}"`
+    const archivo = `"${(e.nombre_original || '').replace(/"/g, '""')}"`
+    const fecha = `"${formatDate(e.fecha_entrega)}"`
+    const late = getLateInfo(e.fecha_entrega, e.fecha_limite)
+    const puntualidad = late ? `"Tardía (${late})"` : '"A tiempo"'
+    const estado = `"${e.estado || 'Sin estado'}"`
+    const nota = e.nota != null && e.nota > 0 ? e.nota : '""'
+    const notaMin = e.nota_minima != null ? e.nota_minima : '6'
+
+    return [alumno, mail, archivo, fecha, puntualidad, estado, nota, notaMin].join(',')
+  })
+
+  // Prefijo UTF-8 BOM para que Excel abra caracteres acentuados correctamente
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n')
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const safeName = (trabajo.value?.descripcion || 'trabajo').slice(0, 25).replace(/[^a-zA-Z0-9_-]/g, '_')
+  a.download = `Calificaciones_${safeName}_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  toast.success('Planilla CSV exportada correctamente')
 }
 
 const entregadoMsg = computed(() => {
@@ -148,7 +201,16 @@ onMounted(async () => {
           <div class="meta-grid">
             <div class="meta-item">
               <span class="meta-label">Fecha de entrega</span>
-              <p class="due-date">{{ formatDate(trabajo.fecha_entrega) }}</p>
+              <div class="due-container">
+                <p class="due-date">{{ formatDate(trabajo.fecha_entrega) }}</p>
+                <span
+                  v-if="relativeDueText"
+                  class="relative-tag font-mono"
+                  :class="`urgency-${dueUrgency}`"
+                >
+                  {{ relativeDueText }}
+                </span>
+              </div>
             </div>
 
             <div class="meta-item">
@@ -187,6 +249,13 @@ onMounted(async () => {
             <div class="estado-info">
               <span class="estado-label">Estado:</span>
               <StatusPill :status="trabajo.asignacion?.estado" />
+              <span
+                v-if="alumnoLateInfo"
+                class="late-badge font-mono"
+                :title="`Entregaste ${alumnoLateInfo} después de la fecha límite`"
+              >
+                ⏱️ Fuera de término ({{ alumnoLateInfo }})
+              </span>
               <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0" class="nota-span">
                 — Nota: {{ trabajo.asignacion.nota }}
                 <span :class="trabajo.asignacion.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
@@ -199,7 +268,18 @@ onMounted(async () => {
 
         <!-- Profesor: tabla de entregas recuadrada -->
         <div v-if="isTeacher" class="entregas-card-box">
-          <h2 class="card-section-title">Entregas de alumnos</h2>
+          <div class="entregas-header">
+            <h2 class="card-section-title">Entregas de alumnos ({{ entregas.length }})</h2>
+            <button
+              v-if="entregas.length > 0"
+              type="button"
+              class="secondary export-csv-btn"
+              @click="exportToCSV"
+              title="Descargar calificaciones y estado de entregas en formato CSV"
+            >
+              📥 Exportar planilla CSV
+            </button>
+          </div>
           <div v-if="entregas.length === 0" class="empty">Todavía no hay entregas.</div>
           <table v-else class="entregas-table">
             <thead>
@@ -393,6 +473,64 @@ onMounted(async () => {
   font-size: 0.92rem;
 }
 
+.due-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.relative-tag {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.urgency-urgent {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning-soft);
+  animation: urgent-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes urgent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(0.97); }
+}
+
+.urgency-warning {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.urgency-expired {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.urgency-submitted {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.urgency-normal {
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
+}
+
+.late-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
 .formats {
   display: flex;
   flex-wrap: wrap;
@@ -454,6 +592,31 @@ onMounted(async () => {
 .empty {
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+.entregas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.export-csv-btn {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.export-csv-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
 .entregas-table {

@@ -303,7 +303,8 @@ router.get('/trabajos/:id', requireAuth, async (req, res) => {
     if (participacion.rol === 'Alumno') {
       const [asig] = await pool.execute(
         `SELECT a.asignacion_id, a.estado, a.nota,
-                (SELECT e.entrega_id FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS entrega_id
+                (SELECT e.entrega_id FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS entrega_id,
+                (SELECT e.fecha_entrega FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS fecha_entrega_alumno
          FROM asignacion a
          WHERE a.tp_id = ? AND a.participacion_id = ?`,
         [req.params.id, participacion.participacion_id]

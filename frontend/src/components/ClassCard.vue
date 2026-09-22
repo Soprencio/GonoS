@@ -1,5 +1,6 @@
 <script setup>
 import { useSpotlight } from '../composables/useSpotlight.js'
+import CopyCodeBadge from './CopyCodeBadge.vue'
 
 defineProps({
   clase: {
@@ -26,7 +27,15 @@ const { onMouseMove, onMouseLeave } = useSpotlight()
       <span v-else-if="clase.rol === 'Creador'" class="badge">Creador</span>
     </div>
     <p v-if="clase.descripcion" class="card-desc">{{ clase.descripcion }}</p>
-    <p class="card-meta">{{ clase.cantidad_trabajos || 0 }} trabajo(s)</p>
+    <div class="card-footer">
+      <span class="card-meta">{{ clase.cantidad_trabajos || 0 }} trabajo(s)</span>
+      <CopyCodeBadge
+        v-if="clase.codigo"
+        :code="clase.codigo"
+        size="sm"
+        @click.stop
+      />
+    </div>
   </div>
 </template>
 
@@ -111,6 +120,15 @@ const { onMouseMove, onMouseLeave } = useSpotlight()
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  margin-top: 4px;
 }
 
 .card-meta {

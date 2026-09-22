@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import MeasureTool2D from './MeasureTool2D.vue'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -22,7 +23,12 @@ const view = reactive({ scale: 1, x: 0, y: 0 })
 
 const mostrarGrilla = ref(props.showGrid)
 const mostrarEjes = ref(props.showAxes)
+const measuring = ref(false)
 const hoveredPinId = ref(null)
+
+function toggleMeasuring() {
+  measuring.value = !measuring.value
+}
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -129,6 +135,7 @@ function onMouseUp() {
 }
 
 function onClick(e) {
+  if (measuring.value) return
   if (!props.annotating || e.button !== 0 || panning) return
   const rect = containerRef.value.getBoundingClientRect()
   const cx = e.clientX - rect.left
@@ -151,6 +158,24 @@ function handleDocClick(e) {
   if (props.activeId != null) {
     const el = e.target.closest('.annotation-pin')
     if (!el) emit('close')
+  }
+}
+
+function handleKeyDown(e) {
+  const tag = e.target?.tagName?.toLowerCase()
+  if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return
+
+  if (e.code === 'Space') {
+    e.preventDefault()
+    fit()
+  } else if (e.key === 'm' || e.key === 'M') {
+    toggleMeasuring()
+  } else if (e.key === 'Escape') {
+    if (measuring.value) {
+      measuring.value = false
+    } else if (props.activeId != null) {
+      emit('close')
+    }
   }
 }
 
@@ -216,6 +241,7 @@ onMounted(() => {
   ro.observe(el)
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
+  window.addEventListener('keydown', handleKeyDown)
   document.addEventListener('pointerdown', handleDocClick)
 })
 
@@ -225,17 +251,18 @@ onUnmounted(() => {
   if (ro) ro.disconnect()
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
+  window.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('pointerdown', handleDocClick)
 })
 
-defineExpose({ focusOnPoint })
+defineExpose({ focusOnPoint, fit, measuring, toggleMeasuring })
 </script>
 
 <template>
   <div
     ref="containerRef"
     class="svg-viewer2d"
-    :class="{ annotating }"
+    :class="{ annotating, measuring }"
     @contextmenu.prevent
     @mousedown="onMouseDown"
     @mouseup="onMouseUp"
@@ -254,6 +281,13 @@ defineExpose({ focusOnPoint })
     <div class="toolbar">
       <button
         class="secondary"
+        @click="fit"
+        title="Centrar y ajustar al visor (Espacio)"
+      >
+        Reset
+      </button>
+      <button
+        class="secondary"
         :class="{ active: mostrarGrilla }"
         @click="mostrarGrilla = !mostrarGrilla"
       >
@@ -265,6 +299,14 @@ defineExpose({ focusOnPoint })
         @click="mostrarEjes = !mostrarEjes"
       >
         {{ mostrarEjes ? 'Esconder ejes' : 'Mostrar ejes' }}
+      </button>
+      <button
+        class="secondary"
+        :class="{ active: measuring }"
+        @click="toggleMeasuring"
+        title="Herramienta de medición 2D en X/Y (M)"
+      >
+        📏 Medir
       </button>
     </div>
 
@@ -362,6 +404,15 @@ defineExpose({ focusOnPoint })
     <div v-if="pending" class="pin-pending" :style="pinStyle(pending.worldPos)">
       <div class="pin-pending-dot"></div>
     </div>
+
+    <!-- Herramienta de medición 2D (Ejes X e Y) -->
+    <MeasureTool2D
+      v-if="measuring"
+      :active="measuring"
+      :view="view"
+      :containerRef="containerRef"
+      @close="measuring = false"
+    />
   </div>
 </template>
 
@@ -376,7 +427,8 @@ defineExpose({ focusOnPoint })
   user-select: none;
 }
 
-.svg-viewer2d.annotating {
+.svg-viewer2d.annotating,
+.svg-viewer2d.measuring {
   cursor: crosshair;
 }
 

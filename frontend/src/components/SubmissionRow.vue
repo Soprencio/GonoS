@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import StatusPill from './StatusPill.vue'
+import { formatDate, getLateInfo } from '../utils/dateUtils.js'
 
 const props = defineProps({
   entrega: {
@@ -19,17 +20,9 @@ const notaMinima = computed(() => {
   return isNaN(nm) ? 6 : nm
 })
 
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return new Intl.DateTimeFormat('es-AR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(d)
-}
+const lateInfo = computed(() => {
+  return getLateInfo(props.entrega.fecha_entrega, props.entrega.fecha_limite)
+})
 
 function formatAlumno(e) {
   return `${e.alumno_nombre} ${e.alumno_apellido}`
@@ -57,7 +50,18 @@ async function descargar() {
 <template>
   <tr class="submission-row">
     <td class="cell alumno">{{ formatAlumno(entrega) }}</td>
-    <td class="cell date">{{ formatDate(entrega.fecha_entrega) }}</td>
+    <td class="cell date">
+      <div class="date-col">
+        <span>{{ formatDate(entrega.fecha_entrega) }}</span>
+        <span
+          v-if="lateInfo"
+          class="late-badge font-mono"
+          :title="`Entregado ${lateInfo} después de la fecha límite`"
+        >
+          ⏱️ {{ lateInfo }}
+        </span>
+      </div>
+    </td>
     <td class="cell status">
       <StatusPill :status="entrega.estado" />
       <span v-if="entrega.devolucion" class="devolucion">{{ entrega.devolucion }}</span>
@@ -98,6 +102,24 @@ async function descargar() {
 .date {
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+.date-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.late-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
+  line-height: 1.2;
 }
 
 .status {

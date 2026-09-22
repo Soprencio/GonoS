@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useViewer } from '../../composables/useViewer.js'
 import ViewCube from './ViewCube.vue'
+import MeasureTool from './MeasureTool.vue'
 
 const props = defineProps({
   src: { type: String, default: '' },
@@ -17,12 +18,14 @@ const canvasRef = ref(null)
 const wrapperRef = ref(null)
 const hasError = ref(false)
 const showShortcuts = ref(false)
+const measuring = ref(false)
 
 const viewer = useViewer(canvasRef)
 
-const cursorStyle = computed(() => props.annotating ? 'crosshair' : 'grab')
+const cursorStyle = computed(() => (props.annotating || measuring.value) ? 'crosshair' : 'grab')
 
 function onClick(event) {
+  if (measuring.value) return
   const hit = viewer.raycast(event)
   if (hit) {
     viewer.selectObject(hit)
@@ -60,6 +63,10 @@ function toggleShortcuts() {
   showShortcuts.value = !showShortcuts.value
 }
 
+function toggleMeasuring() {
+  measuring.value = !measuring.value
+}
+
 function handleKeyDown(e) {
   const tag = e.target?.tagName?.toLowerCase()
   if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return
@@ -71,8 +78,12 @@ function handleKeyDown(e) {
     viewer.toggleWireframe()
   } else if (e.key === 'f' || e.key === 'F') {
     viewer.toggleCamera()
+  } else if (e.key === 'm' || e.key === 'M') {
+    toggleMeasuring()
   } else if (e.key === 'Escape') {
-    if (showShortcuts.value) {
+    if (measuring.value) {
+      measuring.value = false
+    } else if (showShortcuts.value) {
       showShortcuts.value = false
     } else {
       viewer.deselectAll()
@@ -106,7 +117,9 @@ defineExpose({
   getCanvasRect: viewer.getCanvasRect,
   selectedObject: viewer.selectedObject,
   isWireframe: viewer.isWireframe,
-  toggleWireframe: viewer.toggleWireframe
+  toggleWireframe: viewer.toggleWireframe,
+  measuring,
+  toggleMeasuring
 })
 </script>
 
@@ -132,6 +145,14 @@ defineExpose({
       <button class="secondary" @click="viewer.toggleCamera()" title="Alternar vista Flat / Perspectiva (F)">
         {{ viewer.cameraType.value === 'perspective' ? 'Flat' : 'Persp' }}
       </button>
+      <button
+        class="secondary"
+        :class="{ active: measuring }"
+        @click="toggleMeasuring"
+        title="Herramienta de medición 3D (M)"
+      >
+        📏 Medir
+      </button>
 
       <div class="toolbar-spacer"></div>
 
@@ -155,6 +176,13 @@ defineExpose({
       />
 
       <ViewCube v-if="viewer.modelInfo.value.name && !viewer.loading.value" :viewer="viewer" />
+
+      <MeasureTool
+        v-if="measuring"
+        :viewer="viewer"
+        :active="measuring"
+        @close="measuring = false"
+      />
 
       <slot name="overlay"></slot>
 
@@ -222,6 +250,10 @@ defineExpose({
             <div class="shortcut-row">
               <span class="shortcut-desc">Alternar Flat / Persp</span>
               <kbd>F</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Regla / Medición 3D</span>
+              <kbd>M</kbd>
             </div>
             <div class="shortcut-row">
               <span class="shortcut-desc">Deseleccionar / Cerrar</span>

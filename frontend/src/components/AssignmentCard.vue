@@ -1,6 +1,8 @@
 <script setup>
+import { computed } from 'vue'
 import { useSpotlight } from '../composables/useSpotlight.js'
 import StatusPill from './StatusPill.vue'
+import { formatDate, getRelativeTime, getUrgencyStatus } from '../utils/dateUtils.js'
 
 const props = defineProps({
   trabajo: {
@@ -17,17 +19,19 @@ defineEmits(['click'])
 
 const { onMouseMove, onMouseLeave } = useSpotlight()
 
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return new Intl.DateTimeFormat('es-AR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(d)
-}
+const isSubmitted = computed(() => {
+  if (props.isTeacher) return false
+  const s = props.trabajo.estado?.toLowerCase() || ''
+  return s === 'aprobado' || s === 'en revisión' || s === 'desaprobado'
+})
+
+const relativeText = computed(() => {
+  return getRelativeTime(props.trabajo.fecha_entrega, isSubmitted.value)
+})
+
+const urgency = computed(() => {
+  return getUrgencyStatus(props.trabajo.fecha_entrega, isSubmitted.value)
+})
 </script>
 
 <template>
@@ -39,7 +43,16 @@ function formatDate(iso) {
   >
     <div class="card-body">
       <p class="desc">{{ trabajo.descripcion?.substring(0, 120) }}{{ trabajo.descripcion?.length > 120 ? '…' : '' }}</p>
-      <p class="due-date">Entrega: {{ formatDate(trabajo.fecha_entrega) }}</p>
+      <div class="due-row">
+        <span class="due-date">Entrega: {{ formatDate(trabajo.fecha_entrega) }}</span>
+        <span
+          v-if="relativeText"
+          class="relative-tag font-mono"
+          :class="`urgency-${urgency}`"
+        >
+          {{ relativeText }}
+        </span>
+      </div>
     </div>
     <div class="card-side">
       <template v-if="isTeacher">
@@ -123,10 +136,58 @@ function formatDate(iso) {
   font-weight: 500;
 }
 
+.due-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
 .due-date {
   margin: 0;
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+.relative-tag {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.urgency-urgent {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning-soft);
+  animation: urgent-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes urgent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(0.97); }
+}
+
+.urgency-warning {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.urgency-expired {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.urgency-submitted {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.urgency-normal {
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
 }
 
 .card-side {

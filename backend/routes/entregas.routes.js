@@ -197,7 +197,7 @@ router.get('/trabajos/:trabajoId/entregas', requireAuth, async (req, res) => {
 
     const [entregas] = await pool.execute(
       `SELECT e.entrega_id, e.archivo, e.nombre_original, e.fecha_entrega, e.devolucion,
-              a.asignacion_id, a.estado, a.nota, t.nota_minima,
+              a.asignacion_id, a.estado, a.nota, t.nota_minima, t.fecha_entrega AS fecha_limite,
               u.usuario_id, u.nombre AS alumno_nombre, u.apellido AS alumno_apellido, u.mail AS alumno_mail
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
@@ -221,7 +221,7 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
   try {
     const [entregas] = await pool.execute(
       `SELECT e.*, a.tp_id, a.estado AS asignacion_estado, a.nota,
-              t.nota_minima,
+              t.nota_minima, t.fecha_entrega AS fecha_limite,
               p.usuario_id, p.clase_id,
               u.nombre AS alumno_nombre, u.apellido AS alumno_apellido
        FROM entrega e

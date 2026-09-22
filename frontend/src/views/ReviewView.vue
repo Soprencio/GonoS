@@ -13,6 +13,7 @@ import AnnotationPin from '../components/viewer/AnnotationPin.vue'
 import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import StatusPill from '../components/StatusPill.vue'
+import { formatDate, getLateInfo } from '../utils/dateUtils.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -60,6 +61,11 @@ const notaMinima = computed(() => {
   return isNaN(nm) ? 6 : nm
 })
 
+const lateInfo = computed(() => {
+  if (!entrega.value) return null
+  return getLateInfo(entrega.value.fecha_entrega, entrega.value.fecha_limite)
+})
+
 const is3DFormat = computed(() => {
   if (!entrega.value) return false
   const ext = getExtension(entrega.value.nombre_original)
@@ -103,13 +109,6 @@ const rightTabOptions = computed(() => {
   return [{ key: 'comentarios', label: 'Comentarios' }]
 })
 
-function formatDate(iso) {
-  if (!iso) return ''
-  return new Intl.DateTimeFormat('es-AR', {
-    day: 'numeric', month: 'long', year: 'numeric',
-    hour: '2-digit', minute: '2-digit'
-  }).format(new Date(iso))
-}
 
 async function fetchComentarios() {
   comentariosLoading.value = true
@@ -347,7 +346,16 @@ onUnmounted(() => {
           <div class="header-info">
             <h1 class="title">Revisar entrega</h1>
             <p class="subtitle">
-              {{ entrega.alumno?.nombre }} — {{ formatDate(entrega.fecha_entrega) }}
+              <span>{{ entrega.alumno?.nombre }}</span>
+              <span class="sep">•</span>
+              <span>{{ formatDate(entrega.fecha_entrega) }}</span>
+              <span
+                v-if="lateInfo"
+                class="late-badge font-mono"
+                :title="`Entregado ${lateInfo} después de la fecha límite`"
+              >
+                ⏱️ {{ lateInfo }}
+              </span>
               <span v-if="entrega.devolucion" class="tardia">({{ entrega.devolucion }})</span>
             </p>
           </div>
@@ -589,6 +597,25 @@ onUnmounted(() => {
   margin: 2px 0 0;
   font-size: 0.82rem;
   color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sep {
+  opacity: 0.4;
+}
+
+.late-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
 }
 
 .tardia { color: var(--color-danger); }
