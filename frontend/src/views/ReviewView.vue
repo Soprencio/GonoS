@@ -210,12 +210,20 @@ function viewOnModel(pos) {
     viewerRef.value.focusOnPoint(pos)
   }
   activeCommentId.value = comentarios.value.find(
-    c => c.posicion?.x === pos.x && c.posicion?.y === pos.y && c.posicion?.z === pos.z
+    c => c.posicion && Number(c.posicion.x) === Number(pos.x) && Number(c.posicion.y) === Number(pos.y) && Number(c.posicion.z) === Number(pos.z)
   )?.com_priv_id || null
 }
 
 function onPinClick(id) {
   activeCommentId.value = id
+  const com = comentarios.value.find(c => c.com_priv_id === id)
+  if (com && com.posicion) {
+    if (isSVG.value && svgViewerRef.value?.focusOnPoint) {
+      svgViewerRef.value.focusOnPoint(com.posicion)
+    } else if (viewerRef.value?.focusOnPoint) {
+      viewerRef.value.focusOnPoint(com.posicion)
+    }
+  }
 }
 
 function onSelect(id) {

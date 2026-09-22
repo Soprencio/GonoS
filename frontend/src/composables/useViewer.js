@@ -14,6 +14,7 @@ export function useViewer(canvasRef) {
   const selectedObject = ref(null)
   const modelInfo = ref({ name: '', type: '', vertices: 0, triangles: 0 })
   const cameraType = ref('perspective')
+  const isWireframe = ref(false)
 
   let renderer, scene, camera, controls, orthoCamera, perspCamera
   let animationId
@@ -85,6 +86,9 @@ export function useViewer(canvasRef) {
     controls.addEventListener('change', () => {
       for (const cb of viewChangeCallbacks) cb()
     })
+    controls.addEventListener('start', () => {
+      stopCameraFlight()
+    })
     controls.update()
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.6)
@@ -139,10 +143,59 @@ export function useViewer(canvasRef) {
     }
   }
 
+  let animStartPos = null
   let animTargetPos = null
-  let animTargetQuat = null
+  let animStartTarget = null
+  let animTargetTarget = null
   let animProgress = 0
-  const ANIM_DURATION = 20
+  let animDuration = 30
+  let isAnimating = false
+
+  function startCameraFlight({ targetPos, targetControlsTarget, duration = 30 }) {
+    if (!camera || !controls) return
+    animStartPos = camera.position.clone()
+    animTargetPos = targetPos ? targetPos.clone() : null
+    animStartTarget = controls.target.clone()
+    animTargetTarget = targetControlsTarget ? targetControlsTarget.clone() : null
+    animProgress = 0
+    animDuration = Math.max(duration, 1)
+    isAnimating = true
+  }
+
+  function stopCameraFlight() {
+    isAnimating = false
+    animStartPos = null
+    animTargetPos = null
+    animStartTarget = null
+    animTargetTarget = null
+  }
+
+  function updateCameraAnimation() {
+    if (!isAnimating) return
+    animProgress++
+    const t = Math.min(animProgress / animDuration, 1)
+    const ease = 1 - Math.pow(1 - t, 3)
+
+    if (animTargetPos && animStartPos) {
+      camera.position.lerpVectors(animStartPos, animTargetPos, ease)
+    }
+    if (animTargetTarget && animStartTarget && controls) {
+      controls.target.lerpVectors(animStartTarget, animTargetTarget, ease)
+    }
+
+    if (controls) {
+      controls.update()
+    }
+    for (const cb of viewChangeCallbacks) cb()
+
+    if (t >= 1) {
+      if (animTargetPos) camera.position.copy(animTargetPos)
+      if (animTargetTarget && controls) controls.target.copy(animTargetTarget)
+      if (controls) controls.update()
+      stopCameraFlight()
+      for (const cb of viewChangeCallbacks) cb()
+    }
+  }
 
   function setViewDirection(dir, upVector = new THREE.Vector3(0, 1, 0)) {
     const target = controls.target
@@ -157,11 +210,11 @@ export function useViewer(canvasRef) {
     camera.up.copy(upVector)
     controls.object.up.copy(upVector)
 
-    animTargetPos = targetPos
-    animTargetQuat = new THREE.Quaternion().setFromRotationMatrix(
-      new THREE.Matrix4().lookAt(targetPos, target, upVector)
-    )
-    animProgress = 0
+    startCameraFlight({
+      targetPos,
+      targetControlsTarget: target,
+      duration: 25
+    })
   }
 
   function setCameraPreset(preset) {
@@ -173,29 +226,35 @@ export function useViewer(canvasRef) {
     }
   }
 
-  function updateCameraAnimation() {
-    if (!animTargetPos) return
-    animProgress++
-    const t = Math.min(animProgress / ANIM_DURATION, 1)
-    const ease = 1 - Math.pow(1 - t, 3)
+  function applyWireframe(root, enabled) {
+    if (!root) return
+    root.traverse(child => {
+      if (child.isMesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => {
+            if (m) m.wireframe = enabled
+          })
+        } else {
+          child.material.wireframe = enabled
+        }
+      }
+    })
+  }
 
-    camera.position.lerp(animTargetPos, ease)
-    camera.quaternion.slerp(animTargetQuat, ease)
-    controls.update()
+  function setWireframe(enabled) {
+    isWireframe.value = !!enabled
+    applyWireframe(modelGroup, isWireframe.value)
+  }
 
-    if (t >= 1) {
-      camera.position.copy(animTargetPos)
-      camera.quaternion.copy(animTargetQuat)
-      controls.update()
-      animTargetPos = null
-      animTargetQuat = null
-      for (const cb of viewChangeCallbacks) cb()
-    }
+  function toggleWireframe() {
+    setWireframe(!isWireframe.value)
   }
 
   function animate() {
     animationId = requestAnimationFrame(animate)
-    controls.update()
+    if (!isAnimating && controls) {
+      controls.update()
+    }
     updateCameraAnimation()
     if (renderer && scene && camera) {
       if (camera === orthoCamera) {
@@ -317,6 +376,7 @@ export function useViewer(canvasRef) {
     try {
       if (format === '.ifc') {
         await loadIFC(url)
+        if (isWireframe.value) applyWireframe(modelGroup, true)
         fitModelToView()
         updateModelInfo()
         return
@@ -324,6 +384,7 @@ export function useViewer(canvasRef) {
 
       if (format === '.obj' && mtlUrl) {
         await loadObjWithMtl(url, mtlUrl, extraMap)
+        if (isWireframe.value) applyWireframe(modelGroup, true)
         updateModelInfo()
         fitModelToView()
         return
@@ -365,6 +426,7 @@ export function useViewer(canvasRef) {
         modelGroup.add(container)
       }
 
+      if (isWireframe.value) applyWireframe(modelGroup, true)
       updateModelInfo()
       fitModelToView()
     } catch (err) {
@@ -611,7 +673,25 @@ export function useViewer(canvasRef) {
   }
 
   function resetCamera() {
-    fitModelToView()
+    if (modelGroup.children.length === 0) return
+    const box = new THREE.Box3().setFromObject(modelGroup)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+
+    if (maxDim === 0) return
+
+    const dist = maxDim * 1.8
+    const targetPos = new THREE.Vector3(center.x + dist * 0.6, center.y + dist * 0.5, center.z + dist)
+
+    camera.up.set(0, 1, 0)
+    if (controls) controls.object.up.set(0, 1, 0)
+
+    startCameraFlight({
+      targetPos,
+      targetControlsTarget: center,
+      duration: 30
+    })
   }
 
   function raycast(event) {
@@ -635,8 +715,12 @@ export function useViewer(canvasRef) {
   }
 
   function projectToScreen(worldPos) {
-    if (!camera || !renderer) return null
-    const vec = new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z)
+    if (!camera || !renderer || !worldPos) return null
+    const px = Number(worldPos.x)
+    const py = Number(worldPos.y)
+    const pz = Number(worldPos.z)
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) return null
+    const vec = new THREE.Vector3(px, py, pz)
     vec.project(camera)
     if (vec.z > 1) return null
     const rect = renderer.domElement.getBoundingClientRect()
@@ -648,8 +732,35 @@ export function useViewer(canvasRef) {
   }
 
   function focusOnPoint(worldPos) {
-    controls.target.set(worldPos.x, worldPos.y, worldPos.z)
-    controls.update()
+    if (!camera || !controls || !worldPos) return
+
+    const px = Number(worldPos.x)
+    const py = Number(worldPos.y)
+    const pz = Number(worldPos.z)
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) return
+
+    const targetCenter = new THREE.Vector3(px, py, pz)
+    const box = new THREE.Box3().setFromObject(modelGroup)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z, 1)
+
+    const offset = new THREE.Vector3().subVectors(camera.position, controls.target)
+    let currentDist = offset.length()
+    if (!Number.isFinite(currentDist) || currentDist < 0.001) {
+      currentDist = maxDim * 1.5
+      offset.set(0.6, 0.5, 1).normalize()
+    } else {
+      offset.normalize()
+    }
+
+    const targetDist = Math.max(Math.min(currentDist, maxDim * 1.2), maxDim * 0.3)
+    const targetCameraPos = targetCenter.clone().add(offset.multiplyScalar(targetDist))
+
+    startCameraFlight({
+      targetPos: targetCameraPos,
+      targetControlsTarget: targetCenter,
+      duration: 30
+    })
   }
 
   function getCanvasRect() {
@@ -714,6 +825,9 @@ export function useViewer(canvasRef) {
     toggleCamera,
     setViewDirection,
     setCameraPreset,
-    cameraType
+    cameraType,
+    isWireframe,
+    toggleWireframe,
+    setWireframe
   }
 }

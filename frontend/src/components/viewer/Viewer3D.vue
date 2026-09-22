@@ -71,7 +71,9 @@ defineExpose({
   extractHierarchy: viewer.extractHierarchy,
   deselectAll: viewer.deselectAll,
   getCanvasRect: viewer.getCanvasRect,
-  selectedObject: viewer.selectedObject
+  selectedObject: viewer.selectedObject,
+  isWireframe: viewer.isWireframe,
+  toggleWireframe: viewer.toggleWireframe
 })
 </script>
 
@@ -86,11 +88,16 @@ defineExpose({
         title="Aislar pieza seleccionada"
       >Aislar</button>
       <button class="secondary" @click="viewer.showAll()" title="Mostrar todo">Mostrar todo</button>
+      <button
+        class="secondary"
+        :class="{ active: viewer.isWireframe.value }"
+        @click="viewer.toggleWireframe()"
+        title="Alternar modo Wireframe (malla de alambre)"
+      >
+        Wireframe
+      </button>
       <button class="secondary" @click="viewer.toggleCamera()" title="Alternar vista perspectiva/ortogonal">
         {{ viewer.cameraType.value === 'perspective' ? 'Flat' : 'Persp' }}
-      </button>
-      <button class="secondary" @click="viewer.setCameraPreset('isometric')" title="Vista isométrica (alineación óptica)">
-        ISO
       </button>
     </div>
 
@@ -149,6 +156,13 @@ defineExpose({
 .toolbar button {
   font-size: 0.8rem;
   padding: 5px 12px;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.toolbar button.active {
+  background: var(--color-accent);
+  color: var(--color-white);
+  border-color: var(--color-accent);
 }
 
 .canvas-wrapper {

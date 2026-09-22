@@ -22,6 +22,20 @@ const view = reactive({ scale: 1, x: 0, y: 0 })
 
 const mostrarGrilla = ref(props.showGrid)
 const mostrarEjes = ref(props.showAxes)
+const hoveredPinId = ref(null)
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('es-AR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(d)
+}
 
 const MIN_SCALE = 0.01
 const MAX_SCALE = 500
@@ -314,15 +328,32 @@ defineExpose({ focusOnPoint })
       v-for="c in comentarios"
       :key="c.com_priv_id"
       class="annotation-pin"
-      :class="{ active: c.com_priv_id === activeId }"
+      :class="{ active: c.com_priv_id === activeId, hovered: hoveredPinId === c.com_priv_id }"
       :style="pinStyle(c.posicion)"
+      @pointerenter="hoveredPinId = c.com_priv_id"
+      @pointerleave="hoveredPinId = null"
       @click.stop="emit('select', c.com_priv_id)"
     >
       <div class="pin-dot"></div>
+
+      <!-- Popover de previsualización al pasar el mouse (hover, sin nombre del docente) -->
+      <div
+        v-if="c.com_priv_id !== activeId && hoveredPinId === c.com_priv_id"
+        class="pin-preview-popover"
+      >
+        <div v-if="c.fecha" class="preview-date">
+          {{ formatDate(c.fecha) }}
+        </div>
+        <div class="preview-text">
+          {{ c.comentario }}
+        </div>
+      </div>
+
+      <!-- Tooltip completo cuando está activo/seleccionado (sin nombre del docente) -->
       <div v-if="c.com_priv_id === activeId" class="pin-tooltip" @click.stop>
         <div class="tooltip-header">
-          <span class="tooltip-profe">{{ c.profesor || 'Profesor' }}</span>
-          <button class="tooltip-close" @click.stop="emit('close')">&times;</button>
+          <span class="tooltip-date">{{ formatDate(c.fecha) || 'Anotación' }}</span>
+          <button class="tooltip-close" @click.stop="emit('close')" aria-label="Cerrar">&times;</button>
         </div>
         <div class="tooltip-text">{{ c.comentario }}</div>
       </div>
@@ -428,16 +459,55 @@ defineExpose({ focusOnPoint })
   height: 14px;
   border-radius: 50%;
   background: var(--color-accent);
-  border: 2px solid #fff;
+  border: 2px solid var(--color-white);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  transition: transform 120ms ease;
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
 .annotation-pin:hover .pin-dot,
 .annotation-pin.active .pin-dot {
-  transform: scale(1.3);
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px var(--color-accent-soft), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
+/* Popover de previsualización (Hover) */
+.pin-preview-popover {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 180px;
+  max-width: 260px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  padding: 8px 11px;
+  pointer-events: none;
+  z-index: 25;
+  animation: fadeIn 120ms ease;
+}
+
+.preview-date {
+  font-size: 0.72rem;
+  color: var(--color-accent);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.preview-text {
+  font-size: 0.8rem;
+  color: var(--color-text);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+/* Tooltip completo (Activo) */
 .pin-tooltip {
   position: absolute;
   left: 22px;
@@ -448,10 +518,11 @@ defineExpose({ focusOnPoint })
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
   padding: 10px 12px;
   pointer-events: auto;
   z-index: 30;
+  animation: fadeIn 140ms ease;
 }
 
 .tooltip-header {
@@ -461,7 +532,7 @@ defineExpose({ focusOnPoint })
   margin-bottom: 6px;
 }
 
-.tooltip-profe {
+.tooltip-date {
   font-size: 0.75rem;
   color: var(--color-accent);
   font-weight: 600;
@@ -499,8 +570,19 @@ defineExpose({ focusOnPoint })
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #ff6600;
-  border: 2px solid #fff;
+  background: var(--color-accent);
+  border: 2px solid var(--color-white);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50%) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
 }
 </style>

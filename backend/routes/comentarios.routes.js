@@ -145,7 +145,7 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
       comentario: c.comentario,
       fecha: c.fecha,
       posicion: c.posicion_x != null
-        ? { x: c.posicion_x, y: c.posicion_y, z: c.posicion_z }
+        ? { x: Number(c.posicion_x), y: Number(c.posicion_y), z: Number(c.posicion_z) }
         : null,
       profesor: c.profe_nombre
         ? `${c.profe_nombre} ${c.profe_apellido}`
