@@ -8,6 +8,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import SubmissionRow from '../components/SubmissionRow.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
+import StatusPill from '../components/StatusPill.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -183,15 +184,16 @@ onMounted(async () => {
             >
               Ver mi entrega
             </button>
-            <p class="estado-info">
-              Estado: <strong>{{ trabajo.asignacion?.estado || 'Sin estado' }}</strong>
-              <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0">
+            <div class="estado-info">
+              <span class="estado-label">Estado:</span>
+              <StatusPill :status="trabajo.asignacion?.estado" />
+              <span v-if="trabajo.asignacion?.nota != null && trabajo.asignacion.nota > 0" class="nota-span">
                 — Nota: {{ trabajo.asignacion.nota }}
                 <span :class="trabajo.asignacion.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
                   ({{ trabajo.asignacion.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
                 </span>
               </span>
-            </p>
+            </div>
           </div>
         </article>
 
@@ -430,9 +432,23 @@ onMounted(async () => {
 }
 
 .estado-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   font-size: 0.9rem;
   color: var(--color-text-muted);
   margin: 0;
+}
+
+.estado-label {
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.nota-span {
+  display: inline-flex;
+  gap: 4px;
 }
 
 .empty {

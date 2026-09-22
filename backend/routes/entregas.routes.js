@@ -419,10 +419,22 @@ router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
     const notaMinima = normalizarNotaMinima(entregas[0].nota_minima);
     const estadoFinal = calcularEstadoFinal(notaNum, notaMinima);
 
-    await pool.execute(
-      'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
-      [notaNum, estadoFinal, entregas[0].asignacion_id]
-    );
+    try {
+      await pool.execute(
+        'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+        [notaNum, estadoFinal, entregas[0].asignacion_id]
+      );
+    } catch (dbErr) {
+      if (dbErr.code === 'WARN_DATA_TRUNCATED' && estadoFinal === 'Desaprobado') {
+        console.warn('[entregas.routes] La columna "estado" en la base de datos no admite "Desaprobado". Se guardó temporalmente como "Revisado". Aplique backend/database/migracion-estado-desaprobado.sql.');
+        await pool.execute(
+          'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+          [notaNum, 'Revisado', entregas[0].asignacion_id]
+        );
+      } else {
+        throw dbErr;
+      }
+    }
 
     res.json({ mensaje: 'Nota guardada', nota: notaNum, nota_minima: notaMinima, estado: estadoFinal });
   } catch (err) {

@@ -5,6 +5,7 @@ import { useApi } from '../composables/useApi.js'
 import { useDevTools } from '../composables/useDevTools.js'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import StatusPill from '../components/StatusPill.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -140,9 +141,7 @@ onMounted(async () => {
             >
               <div class="trabajo-header">
                 <span class="trabajo-desc">{{ t.descripcion }}</span>
-                <span :class="['estado-badge', estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).cls]">
-                  {{ estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).label }}
-                </span>
+                <StatusPill :status="estadoInfo(t.estado, t.tieneEntrega, t.fecha_entrega).label" />
               </div>
               <div class="trabajo-meta">
                 <span class="meta-label">Entrega:</span>
@@ -280,33 +279,6 @@ onMounted(async () => {
   flex: 1;
 }
 
-.estado-badge {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 99px;
-  white-space: nowrap;
-}
-
-.estado-aprobado {
-  background: #d4edda;
-  color: #155724;
-}
-
-.estado-desaprobado {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.estado-pendiente {
-  background: #cce5ff;
-  color: #004085;
-}
-
-.estado-no-entregado {
-  background: #f8d7da;
-  color: #721c24;
-}
 
 .trabajo-meta {
   display: flex;

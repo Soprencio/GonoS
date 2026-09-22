@@ -12,6 +12,7 @@ import ElementInfo from '../components/viewer/ElementInfo.vue'
 import AnnotationPin from '../components/viewer/AnnotationPin.vue'
 import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import StatusPill from '../components/StatusPill.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -372,7 +373,7 @@ onUnmounted(() => {
             </button>
           </div>
           <div v-else class="nota-display">
-            <span class="estado-badge">{{ entrega.estado }}</span>
+            <StatusPill :status="entrega.estado" />
             <span v-if="entrega.nota != null && entrega.nota > 0" class="nota-value">
               Nota: {{ entrega.nota }}
               <span :class="entrega.nota >= notaMinima ? 'aprobado' : 'desaprobado'">

@@ -223,10 +223,22 @@ router.patch('/entregas/:id/estado', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Solo el profesor puede cambiar el estado de una entrega' });
     }
 
-    await pool.execute(
-      'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
-      [estado, entregas[0].asignacion_id]
-    );
+    try {
+      await pool.execute(
+        'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
+        [estado, entregas[0].asignacion_id]
+      );
+    } catch (dbErr) {
+      if (dbErr.code === 'WARN_DATA_TRUNCATED' && estado === 'Desaprobado') {
+        console.warn('[comentarios.routes] La columna "estado" en la base de datos no admite "Desaprobado". Se guardó temporalmente como "Revisado". Aplique backend/database/migracion-estado-desaprobado.sql.');
+        await pool.execute(
+          'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
+          ['Revisado', entregas[0].asignacion_id]
+        );
+      } else {
+        throw dbErr;
+      }
+    }
 
     res.json({ mensaje: 'Estado actualizado', estado });
   } catch (err) {

@@ -1,5 +1,6 @@
 <script setup>
 import { useSpotlight } from '../composables/useSpotlight.js'
+import StatusPill from './StatusPill.vue'
 
 const props = defineProps({
   trabajo: {
@@ -50,15 +51,7 @@ function formatDate(iso) {
         </span>
       </template>
       <template v-else>
-        <span
-          class="status-badge"
-          :class="{
-            'status-pending': trabajo.estado === 'Pendiente',
-            'status-muted': trabajo.estado !== 'Pendiente'
-          }"
-        >
-          {{ trabajo.estado || 'Sin estado' }}
-        </span>
+        <StatusPill :status="trabajo.estado" />
       </template>
     </div>
   </div>
@@ -153,20 +146,4 @@ function formatDate(iso) {
   color: var(--color-success);
 }
 
-.status-badge {
-  font-size: 0.75rem;
-  padding: 3px 10px;
-  border-radius: 10px;
-  font-weight: 500;
-}
-
-.status-pending {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
-.status-muted {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-disabled);
-}
 </style>

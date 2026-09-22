@@ -12,8 +12,14 @@
   --color-accent-soft:   rgba(25, 176, 181, 0.16);
   --color-spotlight:     rgba(25, 176, 181, 0.32);
 
-  --color-danger:        #C0392B;
-  --color-success:       #2E7D32;
+  --color-danger:        #DC2626;
+  --color-danger-soft:   rgba(220, 38, 38, 0.12);
+  --color-success:       #16A34A;
+  --color-success-soft:  rgba(22, 163, 74, 0.12);
+  --color-warning:       #D97706;
+  --color-warning-soft:  rgba(217, 119, 6, 0.12);
+  --color-info:          #0284C7;
+  --color-info-soft:     rgba(2, 132, 199, 0.12);
   --color-white:         #FFFFFF;
 
   --color-scrollbar-thumb: var(--color-accent);
@@ -25,7 +31,8 @@
   --glass-border:            rgba(226, 226, 222, 0.85);
   --glass-shadow:            0 8px 32px 0 rgba(28, 28, 26, 0.08);
 
-  --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:   'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --radius-sm: 4px;
   --radius-md: 8px;
   --transition-fast: 150ms ease;
@@ -48,8 +55,14 @@
   --color-accent-soft:   rgba(224, 103, 16, 0.15);
   --color-spotlight:     rgba(224, 103, 16, 0.20);
 
-  --color-danger:        #E57373;
-  --color-success:       #66BB6A;
+  --color-danger:        #F87171;
+  --color-danger-soft:   rgba(248, 113, 113, 0.16);
+  --color-success:       #4ADE80;
+  --color-success-soft:  rgba(74, 222, 128, 0.16);
+  --color-warning:       #FBBF24;
+  --color-warning-soft:  rgba(251, 191, 36, 0.16);
+  --color-info:          #38BDF8;
+  --color-info-soft:     rgba(56, 189, 248, 0.16);
   --color-white:         #FFFFFF;
 
   --color-scrollbar-thumb: var(--color-accent);
@@ -162,4 +175,15 @@ input:focus, textarea:focus, select:focus {
   height: 20px;
   margin-bottom: 12px;
   border-radius: var(--radius-sm);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.tech-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
