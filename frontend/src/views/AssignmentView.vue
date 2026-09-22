@@ -7,6 +7,7 @@ import { useDevTools } from '../composables/useDevTools.js'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import SubmissionRow from '../components/SubmissionRow.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import BackgroundToggle from '../components/BackgroundToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -124,6 +125,7 @@ onMounted(async () => {
           <h1 class="title">Trabajo práctico</h1>
         </div>
         <div class="header-right">
+          <BackgroundToggle />
           <ThemeToggle />
         </div>
       </header>
@@ -262,12 +264,17 @@ onMounted(async () => {
 }
 
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .header-left {
@@ -279,12 +286,14 @@ onMounted(async () => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .title {
   margin: 0;
   font-size: 1.3rem;
   color: var(--color-text);
+  font-weight: 700;
 }
 
 .content {
@@ -299,8 +308,10 @@ onMounted(async () => {
 .assignment-card-box,
 .entregas-card-box,
 .comentarios-card-box {
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 28px 32px;
   box-shadow: var(--shadow-card);
@@ -336,8 +347,8 @@ onMounted(async () => {
 }
 
 .consigna-box {
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle-glass);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   padding: 16px 18px;
 }

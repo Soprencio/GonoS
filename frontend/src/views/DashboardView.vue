@@ -6,6 +6,7 @@ import { useApi } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import { useDevTools } from '../composables/useDevTools.js'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import BackgroundToggle from '../components/BackgroundToggle.vue'
 import ClassCard from '../components/ClassCard.vue'
 import ClassCardSkeleton from '../components/ClassCardSkeleton.vue'
 
@@ -106,6 +107,7 @@ onMounted(fetchClases)
     <header class="header">
       <h1 class="logo">GonoS</h1>
       <div class="header-actions">
+        <BackgroundToggle />
         <ThemeToggle />
         <button class="secondary" @click="handleLogout">Cerrar sesión</button>
       </div>
@@ -187,18 +189,24 @@ onMounted(fetchClases)
 }
 
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .logo {
   margin: 0;
   font-size: 1.3rem;
   color: var(--color-text);
+  font-weight: 700;
 }
 
 .header-actions {
@@ -240,8 +248,10 @@ onMounted(fetchClases)
   align-items: center;
   margin-bottom: 24px;
   flex-wrap: wrap;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   box-shadow: var(--shadow-card);
@@ -264,8 +274,10 @@ onMounted(fetchClases)
   text-align: center;
   padding: 48px 24px;
   color: var(--color-text-muted);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
 }
@@ -329,8 +341,10 @@ onMounted(fetchClases)
 }
 
 .modal {
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 32px;
   width: 100%;

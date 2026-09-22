@@ -9,6 +9,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import AssignmentCard from '../components/AssignmentCard.vue'
 import AssignmentFormView from './AssignmentFormView.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import BackgroundToggle from '../components/BackgroundToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -200,6 +201,7 @@ onMounted(async () => {
           <h1 class="title">{{ clase.nombre }}</h1>
         </div>
         <div class="header-right">
+          <BackgroundToggle />
           <ThemeToggle />
         </div>
       </header>
@@ -409,12 +411,17 @@ onMounted(async () => {
 }
 
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .header-left {
@@ -426,22 +433,26 @@ onMounted(async () => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
 .title {
   margin: 0;
   font-size: 1.3rem;
   color: var(--color-text);
+  font-weight: 700;
 }
 
 /* TOPBAR */
 .topbar {
   display: flex;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: 61px;
+  z-index: 40;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
@@ -474,8 +485,10 @@ onMounted(async () => {
   width: calc(100% - 48px);
   margin: 28px auto 60px;
   box-sizing: border-box;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-card);
 }
@@ -487,8 +500,8 @@ onMounted(async () => {
 }
 
 .code-section {
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle-glass);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   margin-bottom: 32px;

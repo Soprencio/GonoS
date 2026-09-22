@@ -1,4 +1,6 @@
 <script setup>
+import { useSpotlight } from '../composables/useSpotlight.js'
+
 const props = defineProps({
   trabajo: {
     type: Object,
@@ -11,6 +13,8 @@ const props = defineProps({
 })
 
 defineEmits(['click'])
+
+const { onMouseMove, onMouseLeave } = useSpotlight()
 
 function formatDate(iso) {
   if (!iso) return ''
@@ -26,7 +30,12 @@ function formatDate(iso) {
 </script>
 
 <template>
-  <div class="assignment-card" @click="$emit('click')">
+  <div
+    class="assignment-card"
+    @click="$emit('click')"
+    @mousemove="onMouseMove"
+    @mouseleave="onMouseLeave"
+  >
     <div class="card-body">
       <p class="desc">{{ trabajo.descripcion?.substring(0, 120) }}{{ trabajo.descripcion?.length > 120 ? '…' : '' }}</p>
       <p class="due-date">Entrega: {{ formatDate(trabajo.fecha_entrega) }}</p>
@@ -57,24 +66,55 @@ function formatDate(iso) {
 
 <style scoped>
 .assignment-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
-  background: var(--color-bg-subtle);
+  background: var(--color-bg-subtle-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   animation: card-in 0.45s ease both;
+  box-shadow: var(--shadow-card);
+}
+
+.assignment-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    360px circle at var(--mouse-x, -999px) var(--mouse-y, -999px),
+    var(--color-spotlight),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .assignment-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-card-hover);
   border-color: var(--color-accent);
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-elevated-glass);
+}
+
+.assignment-card:hover::before {
+  opacity: 1;
+}
+
+.card-body,
+.card-side {
+  position: relative;
+  z-index: 2;
 }
 
 .card-body {
@@ -87,6 +127,7 @@ function formatDate(iso) {
   font-size: 0.9rem;
   color: var(--color-text);
   line-height: 1.4;
+  font-weight: 500;
 }
 
 .due-date {

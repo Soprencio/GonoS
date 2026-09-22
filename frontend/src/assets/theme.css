@@ -9,7 +9,8 @@
 
   --color-accent:        #19B0B5;
   --color-accent-hover:  #158D91;
-  --color-accent-soft:   rgba(25, 176, 181, 0.12);
+  --color-accent-soft:   rgba(25, 176, 181, 0.16);
+  --color-spotlight:     rgba(25, 176, 181, 0.32);
 
   --color-danger:        #C0392B;
   --color-success:       #2E7D32;
@@ -17,6 +18,12 @@
 
   --color-scrollbar-thumb: var(--color-accent);
   --color-scrollbar-track: transparent;
+
+  --color-bg-elevated-glass: rgba(255, 255, 255, 0.82);
+  --color-bg-subtle-glass:   rgba(241, 241, 238, 0.75);
+  --glass-blur:              12px;
+  --glass-border:            rgba(226, 226, 222, 0.85);
+  --glass-shadow:            0 8px 32px 0 rgba(28, 28, 26, 0.08);
 
   --font-family: 'Inter', system-ui, -apple-system, sans-serif;
   --radius-sm: 4px;
@@ -39,6 +46,7 @@
   --color-accent:        #E06710;
   --color-accent-hover:  #F17A22;
   --color-accent-soft:   rgba(224, 103, 16, 0.15);
+  --color-spotlight:     rgba(224, 103, 16, 0.20);
 
   --color-danger:        #E57373;
   --color-success:       #66BB6A;
@@ -47,8 +55,21 @@
   --color-scrollbar-thumb: var(--color-accent);
   --color-scrollbar-track: transparent;
 
+  --color-bg-elevated-glass: rgba(27, 27, 27, 0.82);
+  --color-bg-subtle-glass:   rgba(35, 35, 35, 0.75);
+  --glass-blur:              12px;
+  --glass-border:            rgba(51, 51, 49, 0.85);
+  --glass-shadow:            0 8px 32px 0 rgba(0, 0, 0, 0.45);
+
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5);
   --shadow-card-hover: 0 12px 28px -10px rgba(0, 0, 0, 0.75);
+}
+
+.card-glass, .panel-glass {
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
 }
 
 body {
