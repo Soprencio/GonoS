@@ -150,6 +150,12 @@ export function useViewer(canvasRef) {
   let animProgress = 0
   let animDuration = 30
   let isAnimating = false
+  let animIsSpherical = false
+  let animQStart = new THREE.Quaternion()
+  let animQEnd = new THREE.Quaternion()
+  let animStartDir = new THREE.Vector3()
+  let animStartDist = 1
+  let animTargetDist = 1
 
   function startCameraFlight({ targetPos, targetControlsTarget, duration = 30 }) {
     if (!camera || !controls) return
@@ -159,6 +165,39 @@ export function useViewer(canvasRef) {
     animTargetTarget = targetControlsTarget ? targetControlsTarget.clone() : null
     animProgress = 0
     animDuration = Math.max(duration, 1)
+
+    // Spherical orbit interpolation avoids passing through the model center (which collapses distance to 0)
+    if (animTargetPos && animTargetTarget) {
+      const startOffset = animStartPos.clone().sub(animStartTarget)
+      const targetOffset = animTargetPos.clone().sub(animTargetTarget)
+      animStartDist = startOffset.length()
+      animTargetDist = targetOffset.length()
+
+      if (animStartDist > 0.001 && animTargetDist > 0.001) {
+        animStartDir = startOffset.clone().normalize()
+        const targetDir = targetOffset.clone().normalize()
+        const dot = Math.min(Math.max(animStartDir.dot(targetDir), -1), 1)
+
+        animQStart = new THREE.Quaternion()
+        if (dot < -0.9999) {
+          // Exact opposite directions (180 deg): choose an orthogonal axis to rotate cleanly around
+          let rotAxis = new THREE.Vector3(0, 1, 0)
+          if (Math.abs(animStartDir.dot(rotAxis)) > 0.85) {
+            rotAxis = new THREE.Vector3(0, 0, 1)
+          }
+          rotAxis.sub(animStartDir.clone().multiplyScalar(animStartDir.dot(rotAxis))).normalize()
+          animQEnd = new THREE.Quaternion().setFromAxisAngle(rotAxis, Math.PI)
+        } else {
+          animQEnd = new THREE.Quaternion().setFromUnitVectors(animStartDir, targetDir)
+        }
+        animIsSpherical = true
+      } else {
+        animIsSpherical = false
+      }
+    } else {
+      animIsSpherical = false
+    }
+
     isAnimating = true
   }
 
@@ -168,6 +207,7 @@ export function useViewer(canvasRef) {
     animTargetPos = null
     animStartTarget = null
     animTargetTarget = null
+    animIsSpherical = false
   }
 
   function updateCameraAnimation() {
@@ -176,14 +216,28 @@ export function useViewer(canvasRef) {
     const t = Math.min(animProgress / animDuration, 1)
     const ease = 1 - Math.pow(1 - t, 3)
 
-    if (animTargetPos && animStartPos) {
-      camera.position.lerpVectors(animStartPos, animTargetPos, ease)
-    }
-    if (animTargetTarget && animStartTarget && controls) {
-      controls.target.lerpVectors(animStartTarget, animTargetTarget, ease)
+    if (animIsSpherical) {
+      const currentQ = new THREE.Quaternion().slerpQuaternions(animQStart, animQEnd, ease)
+      const currentDir = animStartDir.clone().applyQuaternion(currentQ)
+      const currentDist = THREE.MathUtils.lerp(animStartDist, animTargetDist, ease)
+      const currentTarget = new THREE.Vector3().lerpVectors(animStartTarget, animTargetTarget, ease)
+
+      camera.position.copy(currentTarget).add(currentDir.multiplyScalar(currentDist))
+      if (controls) {
+        controls.target.copy(currentTarget)
+      }
+    } else {
+      if (animTargetPos && animStartPos) {
+        camera.position.lerpVectors(animStartPos, animTargetPos, ease)
+      }
+      if (animTargetTarget && animStartTarget && controls) {
+        controls.target.lerpVectors(animStartTarget, animTargetTarget, ease)
+      }
     }
 
+    camera.up.set(0, 1, 0)
     if (controls) {
+      controls.object.up.set(0, 1, 0)
       controls.update()
     }
     for (const cb of viewChangeCallbacks) cb()
@@ -191,24 +245,40 @@ export function useViewer(canvasRef) {
     if (t >= 1) {
       if (animTargetPos) camera.position.copy(animTargetPos)
       if (animTargetTarget && controls) controls.target.copy(animTargetTarget)
-      if (controls) controls.update()
+      camera.up.set(0, 1, 0)
+      if (controls) {
+        controls.object.up.set(0, 1, 0)
+        controls.update()
+      }
       stopCameraFlight()
       for (const cb of viewChangeCallbacks) cb()
     }
   }
 
-  function setViewDirection(dir, upVector = new THREE.Vector3(0, 1, 0)) {
+  function setViewDirection(dir) {
+    if (!controls || !camera) return
     const target = controls.target
     const box = new THREE.Box3().setFromObject(modelGroup)
     const size = box.getSize(new THREE.Vector3())
     const maxDim = Math.max(size.x, size.y, size.z, 1)
     const distance = maxDim * 1.8
 
-    const direction = new THREE.Vector3(dir.x, dir.y, dir.z).normalize()
+    const dx = dir.x
+    const dy = dir.y
+    let dz = dir.z
+    // Avoid polar singularity when looking directly along vertical Y axis
+    if (Math.abs(dx) < 0.0001 && Math.abs(dz) < 0.0001) {
+      dz = dy > 0 ? 0.0001 : -0.0001
+    }
+
+    const direction = new THREE.Vector3(dx, dy, dz).normalize()
     const targetPos = target.clone().add(direction.multiplyScalar(distance))
 
-    camera.up.copy(upVector)
-    controls.object.up.copy(upVector)
+    // Always maintain standard Y-up world axis so mouse orbit remains completely predictable
+    camera.up.set(0, 1, 0)
+    if (perspCamera) perspCamera.up.set(0, 1, 0)
+    if (orthoCamera) orthoCamera.up.set(0, 1, 0)
+    controls.object.up.set(0, 1, 0)
 
     startCameraFlight({
       targetPos,
@@ -755,6 +825,11 @@ export function useViewer(canvasRef) {
 
     const targetDist = Math.max(Math.min(currentDist, maxDim * 1.2), maxDim * 0.3)
     const targetCameraPos = targetCenter.clone().add(offset.multiplyScalar(targetDist))
+
+    camera.up.set(0, 1, 0)
+    if (perspCamera) perspCamera.up.set(0, 1, 0)
+    if (orthoCamera) orthoCamera.up.set(0, 1, 0)
+    if (controls) controls.object.up.set(0, 1, 0)
 
     startCameraFlight({
       targetPos: targetCameraPos,
