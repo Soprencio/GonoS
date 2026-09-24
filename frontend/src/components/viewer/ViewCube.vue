@@ -116,11 +116,11 @@ const EDGES_CONFIG = [
 ]
 
 function getAccentColorHex() {
-  return themeState.current === 'dark' ? 0xe06710 : 0x19b0b5
+  return themeState.accent === 'orange' ? 0xe06710 : 0x19b0b5
 }
 
 function getAccentColorCss() {
-  return themeState.current === 'dark' ? '#E06710' : '#19B0B5'
+  return themeState.accent === 'orange' ? '#E06710' : '#19B0B5'
 }
 
 function createTextTexture(label, isHovered) {

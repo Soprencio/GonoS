@@ -22,7 +22,7 @@ function handleKeyDown(e) {
     class="theme-switch"
     role="switch"
     :aria-checked="isDark"
-    :title="isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+    :title="isDark ? 'Cambiar a modo claro (Blanco)' : 'Cambiar a modo oscuro (Negro)'"
     @click="toggle"
     @keydown="handleKeyDown"
   >

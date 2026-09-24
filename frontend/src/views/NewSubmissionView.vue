@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import FileUpload from '../components/FileUpload.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -108,6 +110,9 @@ function onError(err) {
         </div>
         <div class="header-right">
           <ThemeToggle />
+          <AccentToggle />
+          <div class="topbar-user-gap"></div>
+          <UserMenu />
         </div>
       </header>
 
@@ -193,6 +198,14 @@ function onError(err) {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .title {

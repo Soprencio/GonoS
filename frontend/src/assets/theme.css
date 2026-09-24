@@ -7,10 +7,22 @@
   --color-text-muted:    #6B6B66;
   --color-text-disabled: #A9A9A4;
 
-  --color-accent:        #19B0B5;
-  --color-accent-hover:  #158D91;
-  --color-accent-soft:   rgba(25, 176, 181, 0.16);
-  --color-spotlight:     rgba(25, 176, 181, 0.32);
+  /* Paleta de acentos disponibles */
+  --color-palette-blue:        #19B0B5;
+  --color-palette-blue-hover:  #158D91;
+  --color-palette-blue-soft:   rgba(25, 176, 181, 0.16);
+  --color-palette-blue-spot:   rgba(25, 176, 181, 0.32);
+
+  --color-palette-orange:       #E06710;
+  --color-palette-orange-hover: #F17A22;
+  --color-palette-orange-soft:  rgba(224, 103, 16, 0.18);
+  --color-palette-orange-spot:  rgba(224, 103, 16, 0.32);
+
+  /* Acento activo (por defecto azul) */
+  --color-accent:        var(--color-palette-blue);
+  --color-accent-hover:  var(--color-palette-blue-hover);
+  --color-accent-soft:   var(--color-palette-blue-soft);
+  --color-spotlight:     var(--color-palette-blue-spot);
 
   --color-danger:        #DC2626;
   --color-danger-soft:   rgba(220, 38, 38, 0.12);
@@ -50,11 +62,6 @@
   --color-text-muted:    #A3A39D;
   --color-text-disabled: #6B6B66;
 
-  --color-accent:        #E06710;
-  --color-accent-hover:  #F17A22;
-  --color-accent-soft:   rgba(224, 103, 16, 0.15);
-  --color-spotlight:     rgba(224, 103, 16, 0.20);
-
   --color-danger:        #F87171;
   --color-danger-soft:   rgba(248, 113, 113, 0.16);
   --color-success:       #4ADE80;
@@ -76,6 +83,30 @@
 
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.5);
   --shadow-card-hover: 0 12px 28px -10px rgba(0, 0, 0, 0.75);
+}
+
+/* Selección de acento independiente del modo claro/oscuro (permite 4 combinaciones) */
+:root,
+[data-accent="blue"] {
+  --color-accent:        var(--color-palette-blue);
+  --color-accent-hover:  var(--color-palette-blue-hover);
+  --color-accent-soft:   var(--color-palette-blue-soft);
+  --color-spotlight:     var(--color-palette-blue-spot);
+}
+
+[data-accent="orange"] {
+  --color-accent:        var(--color-palette-orange);
+  --color-accent-hover:  var(--color-palette-orange-hover);
+  --color-accent-soft:   var(--color-palette-orange-soft);
+  --color-spotlight:     var(--color-palette-orange-spot);
+}
+
+[data-theme="dark"][data-accent="blue"] {
+  --color-spotlight: rgba(25, 176, 181, 0.20);
+}
+
+[data-theme="dark"][data-accent="orange"] {
+  --color-spotlight: rgba(224, 103, 16, 0.20);
 }
 
 .card-glass, .panel-glass {

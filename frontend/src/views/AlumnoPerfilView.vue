@@ -5,6 +5,8 @@ import { useApi } from '../composables/useApi.js'
 import { useDevTools } from '../composables/useDevTools.js'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
 import StatusPill from '../components/StatusPill.vue'
 
 const route = useRoute()
@@ -120,6 +122,9 @@ onMounted(async () => {
         </div>
         <div class="header-right">
           <ThemeToggle />
+          <AccentToggle />
+          <div class="topbar-user-gap"></div>
+          <UserMenu />
         </div>
       </header>
 
@@ -190,6 +195,14 @@ onMounted(async () => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .header-info {

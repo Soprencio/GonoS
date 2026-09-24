@@ -6,6 +6,8 @@ import { useApi } from '../composables/useApi.js'
 import { useToast } from '../composables/useToast.js'
 import { useDevTools } from '../composables/useDevTools.js'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
 import ClassCard from '../components/ClassCard.vue'
 import ClassCardSkeleton from '../components/ClassCardSkeleton.vue'
@@ -109,7 +111,9 @@ onMounted(fetchClases)
       <div class="header-actions">
         <BackgroundToggle />
         <ThemeToggle />
-        <button class="secondary" @click="handleLogout">Cerrar sesión</button>
+        <AccentToggle />
+        <div class="topbar-user-gap"></div>
+        <UserMenu />
       </div>
     </header>
 
@@ -211,8 +215,15 @@ onMounted(fetchClases)
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .content {

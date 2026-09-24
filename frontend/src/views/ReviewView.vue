@@ -12,6 +12,8 @@ import ElementInfo from '../components/viewer/ElementInfo.vue'
 import AnnotationPin from '../components/viewer/AnnotationPin.vue'
 import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
 import StatusPill from '../components/StatusPill.vue'
 import { formatDate, getLateInfo } from '../utils/dateUtils.js'
 
@@ -399,6 +401,9 @@ onUnmounted(() => {
           </button>
           <span v-if="isProfesor && annotating" class="hint-btn">Hacé clic en el modelo para colocar un pin</span>
           <ThemeToggle />
+          <AccentToggle />
+          <div class="topbar-user-gap"></div>
+          <UserMenu />
         </div>
       </header>
 
@@ -581,6 +586,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .header-info {

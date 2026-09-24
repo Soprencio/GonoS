@@ -9,6 +9,8 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import AssignmentCard from '../components/AssignmentCard.vue'
 import AssignmentFormView from './AssignmentFormView.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
 import CopyCodeBadge from '../components/CopyCodeBadge.vue'
 
@@ -218,6 +220,9 @@ onMounted(async () => {
         <div class="header-right">
           <BackgroundToggle />
           <ThemeToggle />
+          <AccentToggle />
+          <div class="topbar-user-gap"></div>
+          <UserMenu />
         </div>
       </header>
 
@@ -467,6 +472,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .title {

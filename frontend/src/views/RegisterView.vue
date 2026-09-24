@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { authState } from '../state/auth.js'
 import { useApi } from '../composables/useApi.js'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
 import GonosHeroViewer from '../components/GonosHeroViewer.vue'
 
 const router = useRouter()
@@ -68,6 +69,7 @@ async function handleSubmit() {
   <div class="register-view">
     <div class="theme-bar">
       <ThemeToggle />
+      <AccentToggle />
     </div>
 
     <div class="auth-split-container">
@@ -147,6 +149,9 @@ async function handleSubmit() {
   top: 20px;
   right: 24px;
   z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .auth-split-container {

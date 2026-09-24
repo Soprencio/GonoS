@@ -25,11 +25,8 @@ const TARGET_UP = new THREE.Vector3(0, 1, 0)
 const CAMERA_DISTANCE = 100
 const BASE_FRUSTUM_SIZE = 58 // Encuadre óptimo para el modelo
 
-// Estado de la animación de armado (el modelo rota sobre su propio eje central)
-let animStartTime = 0
-const ANIM_DURATION_MS = 2200 // Movimiento suave pero continuo
-const animStartRot = Math.PI * 0.42 // Ángulo donde las vigas se aprecian separadas
-const animTargetRot = 0
+// Estado del vuelo esférico continuo para armar la G desde cualquier rotación
+let flightState = null
 
 function getModelColor(theme) {
   return theme === 'dark' ? 0x8e8e8e : 0x5e636b
@@ -49,6 +46,30 @@ watch(() => themeState.current, () => {
 // Función de suavizado fluido ease-in-out cúbica
 function easeInOutCubic(x) {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2
+}
+
+// Interpolación esférica (slerp) sobre arco de gran círculo entre dos direcciones unitarias
+function slerpVectors(uA, uB, t) {
+  const dot = THREE.MathUtils.clamp(uA.dot(uB), -1, 1)
+
+  if (dot > 0.99995) {
+    return uA.clone().lerp(uB, t).normalize()
+  }
+
+  if (dot < -0.99995) {
+    const ortho = new THREE.Vector3(0, 1, 0).cross(uA)
+    if (ortho.lengthSq() < 0.001) {
+      ortho.set(1, 0, 0).cross(uA)
+    }
+    ortho.normalize()
+    const q = new THREE.Quaternion().setFromAxisAngle(ortho, Math.PI * t)
+    return uA.clone().applyQuaternion(q).normalize()
+  }
+
+  const theta = Math.acos(dot)
+  const axis = new THREE.Vector3().crossVectors(uA, uB).normalize()
+  const q = new THREE.Quaternion().setFromAxisAngle(axis, theta * t)
+  return uA.clone().applyQuaternion(q).normalize()
 }
 
 function updateCameraFrustum() {
@@ -138,13 +159,19 @@ function initThree() {
   controls.minZoom = 0.6
   controls.maxZoom = 2.4
 
-  // Al interactuar el usuario, cancelar animación automática y dar control
-  controls.addEventListener('start', () => {
+  function cancelAnimation() {
     if (isAnimating.value) {
       isAnimating.value = false
-      if (modelMesh) modelMesh.rotation.set(0, 0, 0)
+      flightState = null
+      if (controls) {
+        controls.target.set(0, 0, 0)
+        controls.update()
+      }
     }
-  })
+  }
+
+  // Al interactuar el usuario (drag, click o zoom), cancelar animación y ceder control sin saltos
+  controls.addEventListener('start', cancelAnimation)
 
   // 6. Carga del STL
   loadSTL()
@@ -183,8 +210,18 @@ function loadSTL() {
       scene.add(modelMesh)
       isLoaded.value = true
 
-      // Iniciar secuencia de armado girando sobre su eje
-      startAssemblyAnimation()
+      // Posición inicial con ligero desfase angular (~50°) para mostrar el ensamblado fluido al cargar
+      const initialOffsetDir = TARGET_DIR.clone()
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(50))
+        .normalize()
+      camera.position.copy(initialOffsetDir).multiplyScalar(CAMERA_DISTANCE)
+      camera.up.copy(TARGET_UP)
+      camera.zoom = 1.0
+      camera.updateProjectionMatrix()
+      camera.lookAt(0, 0, 0)
+
+      // Iniciar el armado fluido hacia la G canónica
+      rearmarG()
     },
     undefined,
     (err) => {
@@ -193,46 +230,122 @@ function loadSTL() {
   )
 }
 
-function startAssemblyAnimation() {
-  if (!camera || !controls || !modelMesh) return
+function rearmarG() {
+  if (!isLoaded.value || !modelMesh || !camera || !controls) return
 
-  // La cámara permanece fija en la posición de alineación óptica canónica
+  const currentDir = camera.position.clone().normalize()
+  const targetDir = TARGET_DIR.clone().normalize()
+  const dot = THREE.MathUtils.clamp(currentDir.dot(targetDir), -1, 1)
+  const angle = Math.acos(dot)
+  const zoomDiff = Math.abs(camera.zoom - 1.0)
+
+  // Si ya está prácticamente alineado (< 4° y zoom ~ 1), hacemos un paneo demostrativo suave de apertura y cierre
+  const isAlreadyAligned = angle < 0.07 && zoomDiff < 0.05
+
+  if (isAlreadyAligned) {
+    // Fase 1: se abre suavemente ~48° para revelar la escultura 3D en el espacio
+    // Fase 2: regresa fluidamente y se ensambla de forma exacta en la G
+    const swingAxis = new THREE.Vector3(0, 1, 0)
+    const swingDir = TARGET_DIR.clone().applyAxisAngle(swingAxis, THREE.MathUtils.degToRad(48)).normalize()
+
+    flightState = {
+      type: 'swing',
+      startTime: performance.now(),
+      duration: 2200,
+      startDir: currentDir,
+      swingDir: swingDir,
+      targetDir: targetDir,
+      startZoom: camera.zoom,
+      startUp: camera.up.clone(),
+      startMeshRotY: modelMesh.rotation.y
+    }
+  } else {
+    // Vuelo esférico continuo desde la rotación y zoom actuales directamente hacia la G (sin teletransportes)
+    const dynamicDuration = Math.max(1100, Math.min(2200, 1000 + (angle / Math.PI) * 1100))
+
+    flightState = {
+      type: 'direct',
+      startTime: performance.now(),
+      duration: dynamicDuration,
+      startDir: currentDir,
+      targetDir: targetDir,
+      startZoom: camera.zoom,
+      startUp: camera.up.clone(),
+      startMeshRotY: modelMesh.rotation.y
+    }
+  }
+
+  isAnimating.value = true
+}
+
+function finalizeAlignment() {
+  if (!camera || !controls) return
+
   camera.position.copy(TARGET_DIR).multiplyScalar(CAMERA_DISTANCE)
   camera.up.copy(TARGET_UP)
+  camera.zoom = 1.0
+  camera.updateProjectionMatrix()
   camera.lookAt(0, 0, 0)
+
+  if (modelMesh) {
+    modelMesh.rotation.set(0, 0, 0)
+  }
+
   controls.target.set(0, 0, 0)
   controls.update()
   controls.saveState()
 
-  // El modelo parte desfasado sobre su propio eje (las vigas se ven separadas en el espacio)
-  modelMesh.rotation.set(0, animStartRot, 0)
-
-  isAnimating.value = true
-  animStartTime = performance.now() + 200 // Breve pausa inicial para observar las piezas separadas
-}
-
-function rearmarG() {
-  if (!isLoaded.value || !modelMesh) return
-  controls.reset()
-  startAssemblyAnimation()
+  isAnimating.value = false
+  flightState = null
 }
 
 function animate() {
   animationFrameId = requestAnimationFrame(animate)
 
-  if (isAnimating.value && modelMesh) {
+  if (isAnimating.value && flightState && camera) {
     const now = performance.now()
-    if (now >= animStartTime) {
-      const elapsed = now - animStartTime
-      const rawProgress = Math.min(elapsed / ANIM_DURATION_MS, 1)
-      const t = easeInOutCubic(rawProgress)
+    const elapsed = now - flightState.startTime
+    const rawProgress = Math.min(elapsed / flightState.duration, 1)
 
-      // El modelo rota fluidamente sobre su eje central sin moverse de lugar
-      modelMesh.rotation.y = THREE.MathUtils.lerp(animStartRot, animTargetRot, t)
+    if (flightState.type === 'direct') {
+      const t = easeInOutCubic(rawProgress)
+      const currentDir = slerpVectors(flightState.startDir, flightState.targetDir, t)
+      camera.position.copy(currentDir).multiplyScalar(CAMERA_DISTANCE)
+      camera.up.copy(flightState.startUp).lerp(TARGET_UP, t).normalize()
+      camera.zoom = THREE.MathUtils.lerp(flightState.startZoom, 1.0, t)
+      camera.updateProjectionMatrix()
+      camera.lookAt(0, 0, 0)
+
+      if (modelMesh) {
+        modelMesh.rotation.y = THREE.MathUtils.lerp(flightState.startMeshRotY || 0, 0, t)
+      }
 
       if (rawProgress >= 1) {
-        modelMesh.rotation.y = animTargetRot
-        isAnimating.value = false
+        finalizeAlignment()
+      }
+    } else if (flightState.type === 'swing') {
+      let currentDir
+      if (rawProgress < 0.40) {
+        const p = rawProgress / 0.40
+        const t = Math.sin((p * Math.PI) / 2)
+        currentDir = slerpVectors(flightState.startDir, flightState.swingDir, t)
+      } else {
+        const p = (rawProgress - 0.40) / 0.60
+        const t = easeInOutCubic(p)
+        currentDir = slerpVectors(flightState.swingDir, flightState.targetDir, t)
+      }
+      camera.position.copy(currentDir).multiplyScalar(CAMERA_DISTANCE)
+      camera.up.copy(TARGET_UP)
+      camera.zoom = 1.0
+      camera.updateProjectionMatrix()
+      camera.lookAt(0, 0, 0)
+
+      if (modelMesh) {
+        modelMesh.rotation.y = THREE.MathUtils.lerp(flightState.startMeshRotY || 0, 0, t)
+      }
+
+      if (rawProgress >= 1) {
+        finalizeAlignment()
       }
     }
   } else if (controls) {
