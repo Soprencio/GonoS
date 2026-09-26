@@ -3,6 +3,9 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState } from '../state/auth.js'
 import { useApi } from '../composables/useApi.js'
+import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import GonosHeroViewer from '../components/GonosHeroViewer.vue'
 
 const router = useRouter()
 const api = useApi()
@@ -64,67 +67,168 @@ async function handleSubmit() {
 
 <template>
   <div class="register-view">
-    <div class="card">
-      <h1>GonoS</h1>
-      <p class="subtitle">Crear cuenta</p>
+    <div class="theme-bar">
+      <ThemeToggle />
+      <AccentToggle />
+    </div>
 
-      <form @submit.prevent="handleSubmit">
-        <div class="field">
-          <label for="nombre">Nombre</label>
-          <input id="nombre" v-model="nombre" type="text" placeholder="Tu nombre" autocomplete="given-name" />
+    <div class="auth-split-container">
+      <!-- Cuadrante Izquierdo: Formulario de registro -->
+      <div class="quadrant-form">
+        <div class="card">
+          <h1>Crear cuenta</h1>
+          <p class="subtitle">Registrate para comenzar a usar GonoS</p>
+
+          <form @submit.prevent="handleSubmit">
+            <div class="field">
+              <label for="nombre">Nombre</label>
+              <input id="nombre" v-model="nombre" type="text" placeholder="Tu nombre" autocomplete="given-name" />
+            </div>
+
+            <div class="field">
+              <label for="apellido">Apellido</label>
+              <input id="apellido" v-model="apellido" type="text" placeholder="Tu apellido" autocomplete="family-name" />
+            </div>
+
+            <div class="field">
+              <label for="mail">Mail</label>
+              <input id="mail" v-model="mail" type="email" placeholder="tu@mail.com" autocomplete="email" />
+            </div>
+
+            <div class="field">
+              <label for="password">Contraseña</label>
+              <input id="password" v-model="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+            </div>
+
+            <div class="field">
+              <label for="confirm-password">Confirmar contraseña</label>
+              <input id="confirm-password" v-model="confirmPassword" type="password" placeholder="Repetí la contraseña" autocomplete="new-password" />
+            </div>
+
+            <p v-if="error" class="error">{{ error }}</p>
+
+            <button type="submit" class="primary" :disabled="loading">
+              {{ loading ? 'Creando cuenta...' : 'Crear cuenta' }}
+            </button>
+          </form>
+
+          <p class="footer-text">
+            ¿Ya tenés cuenta?
+            <router-link to="/login">Iniciá sesión</router-link>
+          </p>
         </div>
+      </div>
 
-        <div class="field">
-          <label for="apellido">Apellido</label>
-          <input id="apellido" v-model="apellido" type="text" placeholder="Tu apellido" autocomplete="family-name" />
+      <!-- Cuadrante Derecho: Ilusión 3D anamórfica de la G -->
+      <div class="quadrant-hero">
+        <div class="hero-header">
+          <h2 class="hero-title">GonoS</h2>
+          <p class="hero-subtitle">Plataforma de entrega y revisión en 3D</p>
         </div>
-
-        <div class="field">
-          <label for="mail">Mail</label>
-          <input id="mail" v-model="mail" type="email" placeholder="tu@mail.com" autocomplete="email" />
+        <div class="hero-canvas-wrapper">
+          <GonosHeroViewer />
         </div>
-
-        <div class="field">
-          <label for="password">Contraseña</label>
-          <input id="password" v-model="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
-        </div>
-
-        <div class="field">
-          <label for="confirm-password">Confirmar contraseña</label>
-          <input id="confirm-password" v-model="confirmPassword" type="password" placeholder="Repetí la contraseña" autocomplete="new-password" />
-        </div>
-
-        <p v-if="error" class="error">{{ error }}</p>
-
-        <button type="submit" class="primary" :disabled="loading">
-          {{ loading ? 'Creando cuenta...' : 'Crear cuenta' }}
-        </button>
-      </form>
-
-      <p class="footer-text">
-        ¿Ya tenés cuenta?
-        <router-link to="/login">Iniciá sesión</router-link>
-      </p>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .register-view {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  position: relative;
   min-height: 100vh;
-  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  box-sizing: border-box;
 }
 
-.card {
+.theme-bar {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.auth-split-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 48px;
+  max-width: 1520px;
+  width: 100%;
+  margin: 0 auto;
+  min-height: 580px;
+  padding: 0 48px;
+  box-sizing: border-box;
+}
+
+.quadrant-form {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 100%;
+  max-width: 440px;
+}
+
+.quadrant-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 580px;
+  width: 100%;
+  max-width: 640px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 40px 32px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.hero-header {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.hero-title {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.hero-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.hero-canvas-wrapper {
+  flex: 1;
   width: 100%;
-  max-width: 400px;
+  height: 100%;
+  position: relative;
+}
+
+.card {
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
 }
 
 h1 {
@@ -191,5 +295,25 @@ button.primary:disabled {
   margin: 24px 0 0;
   font-size: 0.85rem;
   color: var(--color-text-muted);
+}
+
+@media (max-width: 920px) {
+  .auth-split-container {
+    flex-direction: column;
+    max-width: 440px;
+    gap: 28px;
+    margin-top: 40px;
+    padding: 0;
+  }
+
+  .quadrant-hero {
+    height: 380px;
+    max-width: 100%;
+  }
+
+  .quadrant-form {
+    justify-content: center;
+    max-width: 100%;
+  }
 }
 </style>

@@ -3,6 +3,7 @@ const path = require('path');
 const pool = require('../database/connection');
 const { requireAuth } = require('../middleware/auth');
 const { upload, deleteFileIfExists, UPLOAD_DIR } = require('../middleware/upload');
+const { normalizarNotaMinima, validarNota, calcularEstadoFinal } = require('../utils/notas');
 
 const router = Router();
 
@@ -190,16 +191,17 @@ router.get('/trabajos/:trabajoId/entregas', requireAuth, async (req, res) => {
     }
 
     const participacion = await getParticipacion(req.user.id, tps[0].clase_id);
-    if (!participacion || participacion.rol !== 'Profesor') {
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
       return res.status(403).json({ error: 'Solo el profesor puede ver las entregas de este trabajo' });
     }
 
     const [entregas] = await pool.execute(
       `SELECT e.entrega_id, e.archivo, e.nombre_original, e.fecha_entrega, e.devolucion,
-              a.asignacion_id, a.estado, a.nota,
+              a.asignacion_id, a.estado, a.nota, t.nota_minima, t.fecha_entrega AS fecha_limite,
               u.usuario_id, u.nombre AS alumno_nombre, u.apellido AS alumno_apellido, u.mail AS alumno_mail
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+       JOIN trabajos t ON a.tp_id = t.tp_id
        JOIN participaciones p ON a.participacion_id = p.participacion_id
        JOIN usuarios u ON p.usuario_id = u.usuario_id
        WHERE a.tp_id = ?
@@ -219,10 +221,12 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
   try {
     const [entregas] = await pool.execute(
       `SELECT e.*, a.tp_id, a.estado AS asignacion_estado, a.nota,
+              t.nota_minima, t.fecha_entrega AS fecha_limite,
               p.usuario_id, p.clase_id,
               u.nombre AS alumno_nombre, u.apellido AS alumno_apellido
        FROM entrega e
        JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+       JOIN trabajos t ON a.tp_id = t.tp_id
        JOIN participaciones p ON a.participacion_id = p.participacion_id
        JOIN usuarios u ON p.usuario_id = u.usuario_id
        WHERE e.entrega_id = ?`,
@@ -242,6 +246,18 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
 
     if (participacion.rol === 'Alumno' && entrega.usuario_id !== req.user.id) {
       return res.status(403).json({ error: 'No tenés acceso a esta entrega' });
+    }
+
+    // Determinar si el usuario puede calificar esta entrega
+    let puedeCalificar = false;
+    if (participacion.rol === 'Creador') {
+      puedeCalificar = true;
+    } else if (participacion.rol === 'Profesor') {
+      const [tps] = await pool.execute(
+        'SELECT participacion_id FROM trabajos WHERE tp_id = ?',
+        [entrega.tp_id]
+      );
+      puedeCalificar = tps.length > 0 && tps[0].participacion_id === participacion.participacion_id;
     }
 
     const [archivosExtra] = await pool.execute(
@@ -265,7 +281,9 @@ router.get('/entregas/:id', requireAuth, async (req, res) => {
       tp_id: entrega.tp_id,
       estado: entrega.asignacion_estado,
       nota: entrega.nota,
+      nota_minima: entrega.nota_minima,
       rol: participacion.rol,
+      puedeCalificar,
       archivos_extra: extras,
       alumno: {
         id: entrega.usuario_id,
@@ -355,6 +373,72 @@ router.get('/entregas/:id/archivos/:archivoExtraId', requireAuth, async (req, re
     res.download(filePath, extras[0].nombre_original);
   } catch (err) {
     console.error('Error al descargar archivo extra:', err);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+// ── PATCH /api/entregas/:id/nota — guardar nota (solo Profesor)
+router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
+  const { nota } = req.body;
+
+  const validacion = validarNota(nota);
+  if (!validacion.ok) {
+    return res.status(400).json({ error: validacion.error });
+  }
+
+  const notaNum = validacion.valor;
+
+  try {
+    const [entregas] = await pool.execute(
+      `SELECT e.entrega_id, e.asignacion_id, t.clase_id, t.tp_id, t.nota_minima
+       FROM entrega e
+       JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+       JOIN trabajos t ON a.tp_id = t.tp_id
+       WHERE e.entrega_id = ?`,
+      [req.params.id]
+    );
+
+    if (entregas.length === 0) {
+      return res.status(404).json({ error: 'Entrega no encontrada' });
+    }
+
+    const participacion = await getParticipacion(req.user.id, entregas[0].clase_id);
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+      return res.status(403).json({ error: 'Solo el profesor puede calificar' });
+    }
+
+    // Verificar que puede calificar este trabajo (solo si lo creó o es Creador de la clase)
+    const [tps] = await pool.execute(
+      'SELECT participacion_id FROM trabajos WHERE tp_id = ?',
+      [entregas[0].tp_id]
+    );
+    if (tps.length > 0 && participacion.rol !== 'Creador' && tps[0].participacion_id !== participacion.participacion_id) {
+      return res.status(403).json({ error: 'No podés calificar un trabajo que no creaste' });
+    }
+
+    const notaMinima = normalizarNotaMinima(entregas[0].nota_minima);
+    const estadoFinal = calcularEstadoFinal(notaNum, notaMinima);
+
+    try {
+      await pool.execute(
+        'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+        [notaNum, estadoFinal, entregas[0].asignacion_id]
+      );
+    } catch (dbErr) {
+      if (dbErr.code === 'WARN_DATA_TRUNCATED' && estadoFinal === 'Desaprobado') {
+        console.warn('[entregas.routes] La columna "estado" en la base de datos no admite "Desaprobado". Se guardó temporalmente como "Revisado". Aplique backend/database/migracion-estado-desaprobado.sql.');
+        await pool.execute(
+          'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+          [notaNum, 'Revisado', entregas[0].asignacion_id]
+        );
+      } else {
+        throw dbErr;
+      }
+    }
+
+    res.json({ mensaje: 'Nota guardada', nota: notaNum, nota_minima: notaMinima, estado: estadoFinal });
+  } catch (err) {
+    console.error('Error al guardar nota:', err);
     res.status(500).json({ error: 'Error interno del servidor' });
   }
 });

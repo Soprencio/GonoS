@@ -3,6 +3,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../composables/useApi.js'
 import FileUpload from '../components/FileUpload.vue'
+import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,12 +21,14 @@ const fileUploadRef = ref(null)
 
 const formatos = computed(() => trabajo.value?.formatos_aceptados || [])
 
-const isObjSelected = computed(() => {
-  if (!fileUploadRef.value) return false
-  return formatos.value.includes('.obj')
-})
+const isObjSelected = ref(false)
 
-function onFileSelected() {
+function onFileSelected(file) {
+  if (!file) {
+    isObjSelected.value = false
+    return
+  }
+  isObjSelected.value = file.name.toLowerCase().endsWith('.obj')
 }
 
 const EXTRA_ACCEPTED = ['.mtl', '.jpg', '.jpeg', '.png', '.bmp', '.tga', '.tiff', '.svg', '.pdf']
@@ -70,12 +75,9 @@ onMounted(async () => {
   try {
     const res = await api.get(`/trabajos/${route.params.id}`)
     trabajo.value = res.data
-    if (res.data.rol !== 'Alumno') {
-      router.push(`/trabajo/${route.params.id}`)
-    }
   } catch (err) {
-    if (err.response?.status === 403 || err.response?.status === 404) {
-      router.push('/')
+    if (err.response && err.response.status === 404) {
+      error.value = 'Trabajo no encontrado'
     } else {
       error.value = 'Error al cargar el trabajo'
     }
@@ -84,15 +86,15 @@ onMounted(async () => {
   }
 })
 
-function onUpload() {
-  successMsg.value = '¡Trabajo entregado correctamente!'
+function onUpload(res) {
+  successMsg.value = '¡Trabajo entregado con éxito!'
   setTimeout(() => {
     router.push(`/trabajo/${route.params.id}?entregado=1`)
   }, 1500)
 }
 
-function onError() {
-  successMsg.value = ''
+function onError(err) {
+  // handled inside component
 }
 </script>
 
@@ -102,13 +104,21 @@ function onError() {
     <div v-else-if="error" class="state-msg error">{{ error }}</div>
     <template v-else-if="trabajo">
       <header class="header">
-        <button class="secondary" @click="router.push(`/trabajo/${route.params.id}`)">← Volver</button>
-        <h1 class="title">Nueva entrega</h1>
+        <div class="header-left">
+          <button class="secondary" @click="router.push(`/trabajo/${route.params.id}`)">← Volver</button>
+          <h1 class="title">Nueva entrega</h1>
+        </div>
+        <div class="header-right">
+          <ThemeToggle />
+          <AccentToggle />
+          <div class="topbar-user-gap"></div>
+          <UserMenu />
+        </div>
       </header>
 
       <main class="content">
-        <section class="section">
-          <h2>Consigna</h2>
+        <section class="consigna-card">
+          <span class="consigna-label">Consigna</span>
           <p class="consigna">{{ trabajo.descripcion }}</p>
         </section>
 
@@ -173,9 +183,29 @@ function onError() {
 .header {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .title {
@@ -186,23 +216,33 @@ function onError() {
 
 .content {
   flex: 1;
-  padding: 24px;
-  max-width: 600px;
-  width: 100%;
-  margin: 0 auto;
+  padding: 32px;
+  max-width: 680px;
+  width: calc(100% - 48px);
+  margin: 28px auto 60px;
   box-sizing: border-box;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
 }
 
-.section {
-  margin-bottom: 28px;
+.consigna-card {
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
-.section h2 {
-  font-size: 0.85rem;
+.consigna-label {
+  font-size: 0.78rem;
   color: var(--color-text-muted);
-  margin: 0 0 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6px;
 }
 
 .consigna {
@@ -210,7 +250,7 @@ function onError() {
   line-height: 1.6;
   white-space: pre-wrap;
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
 }
 
 .success-msg {

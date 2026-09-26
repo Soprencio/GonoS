@@ -3,14 +3,23 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState } from '../state/auth.js'
 import { useApi } from '../composables/useApi.js'
+import { useToast } from '../composables/useToast.js'
+import { useDevTools } from '../composables/useDevTools.js'
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
+import UserMenu from '../components/UserMenu.vue'
+import BackgroundToggle from '../components/BackgroundToggle.vue'
 import ClassCard from '../components/ClassCard.vue'
+import ClassCardSkeleton from '../components/ClassCardSkeleton.vue'
 
 const router = useRouter()
 const api = useApi()
+const toast = useToast()
+const { state: devState } = useDevTools()
 
 const clases = ref([])
 const loading = ref(true)
+const isLoading = computed(() => loading.value || devState.forceSkeletons || devState.isSimulatingLoading)
 
 const showCreateModal = ref(false)
 const createNombre = ref('')
@@ -23,7 +32,7 @@ const joinCode = ref('')
 const joining = ref(false)
 const joinError = ref('')
 
-const isEmpty = computed(() => !loading.value && clases.value.length === 0)
+const isEmpty = computed(() => !isLoading.value && clases.value.length === 0)
 
 function normalizeCode(e) {
   joinCode.value = joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -53,8 +62,11 @@ async function createClass() {
     showCreateModal.value = false
     createNombre.value = ''
     createDescripcion.value = ''
+    toast.success('Clase creada exitosamente')
   } catch (err) {
-    createError.value = err.response?.data?.error || 'Error al crear la clase'
+    const msg = err.response?.data?.error || 'Error al crear la clase'
+    createError.value = msg
+    toast.error(msg)
   } finally {
     creating.value = false
   }
@@ -70,8 +82,11 @@ async function joinClass() {
     await fetchClases()
     showJoinInput.value = false
     joinCode.value = ''
+    toast.success('Te has unido a la clase exitosamente')
   } catch (err) {
-    joinError.value = err.response?.data?.error || 'Error al unirse a la clase'
+    const msg = err.response?.data?.error || 'Error al unirse a la clase'
+    joinError.value = msg
+    toast.error(msg)
   } finally {
     joining.value = false
   }
@@ -94,8 +109,11 @@ onMounted(fetchClases)
     <header class="header">
       <h1 class="logo">GonoS</h1>
       <div class="header-actions">
+        <BackgroundToggle />
         <ThemeToggle />
-        <button class="secondary" @click="handleLogout">Cerrar sesión</button>
+        <AccentToggle />
+        <div class="topbar-user-gap"></div>
+        <UserMenu />
       </div>
     </header>
 
@@ -122,16 +140,19 @@ onMounted(fetchClases)
         <p v-if="joinError" class="error-msg">{{ joinError }}</p>
       </div>
 
-      <div v-if="loading" class="state-msg">Cargando clases...</div>
+      <div v-if="isLoading" class="grid">
+        <ClassCardSkeleton v-for="n in 6" :key="n" />
+      </div>
       <div v-else-if="isEmpty" class="state-msg">
         <p>Todavía no tenés clases.</p>
         <p>Creá una o unite a una con el código de invitación.</p>
       </div>
       <div v-else class="grid">
         <ClassCard
-          v-for="c in clases"
+          v-for="(c, i) in clases"
           :key="c.clase_id"
           :clase="c"
+          :style="{ animationDelay: i * 45 + 'ms' }"
           @click="goToClass(c.clase_id)"
         />
       </div>
@@ -172,23 +193,37 @@ onMounted(fetchClases)
 }
 
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .logo {
   margin: 0;
   font-size: 1.3rem;
   color: var(--color-text);
+  font-weight: 700;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
+}
+
+.topbar-user-gap {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .content {
@@ -220,10 +255,17 @@ onMounted(fetchClases)
 
 .join-box {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
   margin-bottom: 24px;
   flex-wrap: wrap;
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-card);
 }
 
 .code-input {
@@ -231,7 +273,7 @@ onMounted(fetchClases)
   padding: 10px 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-subtle);
   color: var(--color-text);
   font-size: 1.1rem;
   letter-spacing: 3px;
@@ -241,8 +283,14 @@ onMounted(fetchClases)
 
 .state-msg {
   text-align: center;
-  padding: 60px 20px;
+  padding: 48px 24px;
   color: var(--color-text-muted);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
 }
 
 .state-msg p {
@@ -293,20 +341,26 @@ onMounted(fetchClases)
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 100;
+  padding: 16px;
 }
 
 .modal {
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: 32px;
   width: 100%;
   max-width: 400px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .modal h3 {

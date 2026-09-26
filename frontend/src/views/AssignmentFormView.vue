@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useApi } from '../composables/useApi.js'
 
 const emit = defineEmits(['created', 'close'])
@@ -14,6 +14,8 @@ const api = useApi()
 
 const descripcion = ref('')
 const fechaEntrega = ref('')
+const horaEntrega = ref('23:59')
+const notaMinima = ref(6)
 const formatos = ref({
   obj: false,
   stl: false,
@@ -24,6 +26,11 @@ const formatos = ref({
 })
 const error = ref('')
 const creating = ref(false)
+
+const alumnos = ref([])
+const alumnosLoading = ref(false)
+const selectedAlumnos = ref([])
+const step = ref(1) // 1 = info, 2 = alumnos
 
 function today() {
   const d = new Date()
@@ -41,31 +48,68 @@ const selectedFormats = computed(() => {
     .map(([k]) => `.${k}`)
 })
 
+function toggleAll(checked) {
+  selectedAlumnos.value = checked ? alumnos.value.map(a => a.participacion_id) : []
+}
+
+function toggleAlumno(id) {
+  const idx = selectedAlumnos.value.indexOf(id)
+  if (idx === -1) {
+    selectedAlumnos.value.push(id)
+  } else {
+    selectedAlumnos.value.splice(idx, 1)
+  }
+}
+
+async function nextStep() {
+  error.value = ''
+  if (step.value === 1) {
+    if (!descripcion.value.trim()) {
+      error.value = 'La descripción es obligatoria'
+      return
+    }
+    if (!fechaEntrega.value) {
+      error.value = 'La fecha de entrega es obligatoria'
+      return
+    }
+    const fechaHora = new Date(`${fechaEntrega.value}T${horaEntrega.value}:00`)
+    if (isNaN(fechaHora.getTime())) {
+      error.value = 'Fecha u hora inválida'
+      return
+    }
+    if (fechaHora <= new Date()) {
+      error.value = 'La fecha de entrega debe ser una fecha y hora futura'
+      return
+    }
+    if (selectedFormats.value.length === 0) {
+      error.value = 'Seleccioná al menos un formato aceptado'
+      return
+    }
+    const nm = parseFloat(notaMinima.value)
+    if (isNaN(nm) || nm < 1 || nm > 10) {
+      error.value = 'La nota mínima de aprobación debe estar entre 1 y 10'
+      return
+    }
+    step.value = 2
+  }
+}
+
 async function submit() {
   error.value = ''
-  if (!descripcion.value.trim()) {
-    error.value = 'La descripción es obligatoria'
-    return
-  }
-  if (!fechaEntrega.value) {
-    error.value = 'La fecha de entrega es obligatoria'
-    return
-  }
-  if (new Date(fechaEntrega.value) <= new Date()) {
-    error.value = 'La fecha de entrega debe ser una fecha futura'
-    return
-  }
-  if (selectedFormats.value.length === 0) {
-    error.value = 'Seleccioná al menos un formato aceptado'
+  if (selectedAlumnos.value.length === 0) {
+    error.value = 'Seleccioná al menos un alumno'
     return
   }
 
   creating.value = true
   try {
+    const fechaHora = `${fechaEntrega.value}T${horaEntrega.value}:00`
     const res = await api.post(`/clases/${props.claseId}/trabajos`, {
       descripcion: descripcion.value.trim(),
-      fecha_entrega: fechaEntrega.value,
-      formatos_aceptados: selectedFormats.value
+      fecha_entrega: fechaHora,
+      formatos_aceptados: selectedFormats.value,
+      nota_minima: parseFloat(notaMinima.value),
+      alumnos_ids: selectedAlumnos.value
     })
     emit('created', res.data)
   } catch (err) {
@@ -74,55 +118,126 @@ async function submit() {
     creating.value = false
   }
 }
+
+onMounted(async () => {
+  alumnosLoading.value = true
+  try {
+    const res = await api.get(`/clases/${props.claseId}/alumnos`)
+    alumnos.value = res.data
+    selectedAlumnos.value = res.data.map(a => a.participacion_id)
+  } catch {
+    error.value = 'Error al cargar los alumnos'
+  } finally {
+    alumnosLoading.value = false
+  }
+})
 </script>
 
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal">
       <h3>Nuevo trabajo</h3>
-      <form @submit.prevent="submit">
-        <div class="field">
-          <label for="af-desc">Descripción / Consigna</label>
-          <textarea
-            id="af-desc"
-            v-model="descripcion"
-            placeholder="Describí el trabajo a entregar..."
-            rows="5"
-          ></textarea>
-        </div>
-        <div class="field">
-          <label for="af-fecha">Fecha de entrega</label>
-          <input
-            id="af-fecha"
-            v-model="fechaEntrega"
-            type="date"
-            :min="today()"
-          />
-        </div>
-        <div class="field">
-          <label>Formatos aceptados</label>
-          <div class="check-grid">
-            <label
-              v-for="fmt in formatosList"
-              :key="fmt"
-              class="check-item"
-            >
-              <input type="checkbox" v-model="formatos[fmt]" />
-              <span>.{{ fmt }}</span>
-            </label>
+
+      <!-- Step 1: Info básica -->
+      <div v-if="step === 1">
+        <form @submit.prevent="nextStep">
+          <div class="field">
+            <label for="af-desc">Descripción / Consigna</label>
+            <textarea
+              id="af-desc"
+              v-model="descripcion"
+              placeholder="Describí el trabajo a entregar..."
+              rows="5"
+            ></textarea>
           </div>
-          <p class="formats-note">
-            Otros formatos como .fbx pueden no visualizarse correctamente.
-          </p>
+          <div class="field">
+            <label for="af-fecha">Fecha y hora de entrega</label>
+            <div class="datetime-row">
+              <input
+                id="af-fecha"
+                v-model="fechaEntrega"
+                type="date"
+                :min="today()"
+              />
+              <input
+                v-model="horaEntrega"
+                type="time"
+              />
+            </div>
+          </div>
+          <div class="field">
+            <label>Formatos aceptados</label>
+            <div class="check-grid">
+              <label
+                v-for="fmt in formatosList"
+                :key="fmt"
+                class="check-item"
+              >
+                <input type="checkbox" v-model="formatos[fmt]" />
+                <span>.{{ fmt }}</span>
+              </label>
+            </div>
+            <p class="formats-note">
+              Otros formatos como .fbx pueden no visualizarse correctamente.
+            </p>
+          </div>
+          <div class="field">
+            <label for="af-nota-minima">Nota mínima de aprobación</label>
+            <input
+              id="af-nota-minima"
+              v-model="notaMinima"
+              type="number"
+              min="1"
+              max="10"
+              step="0.01"
+            />
+          </div>
+          <p v-if="error" class="error-msg">{{ error }}</p>
+          <div class="modal-actions">
+            <button type="button" class="secondary" @click="$emit('close')">Cancelar</button>
+            <button type="submit" class="primary">Siguiente</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Step 2: Seleccionar alumnos -->
+      <div v-if="step === 2">
+        <div class="field">
+          <label>Alumnos</label>
+          <div v-if="alumnosLoading" class="loading-text">Cargando alumnos...</div>
+          <div v-else>
+            <label class="check-item check-all">
+              <input
+                type="checkbox"
+                :checked="selectedAlumnos.length === alumnos.length && alumnos.length > 0"
+                @change="toggleAll($event.target.checked)"
+              />
+              <span>Seleccionar todos</span>
+            </label>
+            <div class="alumnos-grid">
+              <label
+                v-for="a in alumnos"
+                :key="a.participacion_id"
+                class="check-item"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedAlumnos.includes(a.participacion_id)"
+                  @change="toggleAlumno(a.participacion_id)"
+                />
+                <span>{{ a.apellido }}, {{ a.nombre }}</span>
+              </label>
+            </div>
+          </div>
         </div>
         <p v-if="error" class="error-msg">{{ error }}</p>
         <div class="modal-actions">
-          <button type="button" class="secondary" @click="$emit('close')">Cancelar</button>
-          <button type="submit" class="primary" :disabled="creating">
+          <button type="button" class="secondary" @click="step = 1">Volver</button>
+          <button type="button" class="primary" :disabled="creating" @click="submit">
             {{ creating ? 'Creando...' : 'Publicar trabajo' }}
           </button>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>
@@ -131,20 +246,24 @@ async function submit() {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 100;
+  padding: 16px;
 }
 
 .modal {
   background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 32px;
   width: 100%;
   max-width: 500px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-card-hover);
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -165,8 +284,20 @@ async function submit() {
   font-size: 0.85rem;
 }
 
+.datetime-row {
+  display: flex;
+  gap: 8px;
+}
+
+.datetime-row input[type="date"],
+.datetime-row input[type="time"] {
+  flex: 1;
+}
+
 .field textarea,
-.field input[type="date"] {
+.field input[type="date"],
+.field input[type="time"],
+.field input[type="number"] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--color-border);
@@ -205,6 +336,27 @@ async function submit() {
   margin: 8px 0 0;
   font-size: 0.8rem;
   color: var(--color-text-disabled);
+}
+
+.loading-text {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  padding: 8px 0;
+}
+
+.check-all {
+  font-weight: 600;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 6px;
+}
+
+.alumnos-grid {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .error-msg {

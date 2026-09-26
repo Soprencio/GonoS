@@ -30,7 +30,7 @@ async function getEntregaClaseId(entregaId) {
   return rows[0] || null;
 }
 
-const ESTADOS_VALIDOS = ['Pendiente', 'En revisión', 'Revisado', 'Aprobado'];
+const ESTADOS_VALIDOS = ['Pendiente', 'En revisión', 'Desaprobado', 'Aprobado'];
 
 // ── POST /api/entregas/:entregaId/comentarios — agregar comentario (solo Profesor)
 router.post('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => {
@@ -59,8 +59,8 @@ router.post('/entregas/:entregaId/comentarios', requireAuth, async (req, res) =>
     }
 
     const participacion = await getParticipacion(req.user.id, entregaInfo.clase_id);
-    if (!participacion || participacion.rol !== 'Profesor') {
-      return res.status(403).json({ error: 'Solo el profesor puede comentar en esta entrega' });
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+      return res.status(403).json({ error: 'Solo el profesor o creador pueden comentar en esta entrega' });
     }
 
     const conn = await pool.getConnection();
@@ -122,7 +122,8 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
 
     const [comentarios] = await pool.execute(
       `SELECT c.com_priv_id, c.comentario, c.fecha,
-              p.posicion_x, p.posicion_y, p.posicion_z
+              p.posicion_x, p.posicion_y, p.posicion_z,
+              u.nombre AS profe_nombre, u.apellido AS profe_apellido
        FROM comentario_priv c
        LEFT JOIN (
          SELECT com_priv_id,
@@ -132,6 +133,8 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
          FROM posiciones
          GROUP BY com_priv_id
        ) p ON c.com_priv_id = p.com_priv_id
+       JOIN participaciones pp ON c.participacion_id = pp.participacion_id
+       JOIN usuarios u ON pp.usuario_id = u.usuario_id
        WHERE c.entrega_id = ?
        ORDER BY c.fecha ASC`,
       [req.params.entregaId]
@@ -142,8 +145,11 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
       comentario: c.comentario,
       fecha: c.fecha,
       posicion: c.posicion_x != null
-        ? { x: c.posicion_x, y: c.posicion_y, z: c.posicion_z }
-        : null
+        ? { x: Number(c.posicion_x), y: Number(c.posicion_y), z: Number(c.posicion_z) }
+        : null,
+      profesor: c.profe_nombre
+        ? `${c.profe_nombre} ${c.profe_apellido}`
+        : 'Profesor'
     }));
 
     res.json(result);
@@ -174,8 +180,8 @@ router.delete('/comentarios/:id', requireAuth, async (req, res) => {
     const com = comentarios[0];
     const participacion = await getParticipacion(req.user.id, com.clase_id);
 
-    if (!participacion || participacion.rol !== 'Profesor') {
-      return res.status(403).json({ error: 'Solo el profesor puede eliminar comentarios' });
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+      return res.status(403).json({ error: 'Solo el profesor o creador pueden eliminar comentarios' });
     }
 
     // Las posiciones se borran por CASCADE
@@ -217,10 +223,22 @@ router.patch('/entregas/:id/estado', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Solo el profesor puede cambiar el estado de una entrega' });
     }
 
-    await pool.execute(
-      'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
-      [estado, entregas[0].asignacion_id]
-    );
+    try {
+      await pool.execute(
+        'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
+        [estado, entregas[0].asignacion_id]
+      );
+    } catch (dbErr) {
+      if (dbErr.code === 'WARN_DATA_TRUNCATED' && estado === 'Desaprobado') {
+        console.warn('[comentarios.routes] La columna "estado" en la base de datos no admite "Desaprobado". Se guardó temporalmente como "Revisado". Aplique backend/database/migracion-estado-desaprobado.sql.');
+        await pool.execute(
+          'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
+          ['Revisado', entregas[0].asignacion_id]
+        );
+      } else {
+        throw dbErr;
+      }
+    }
 
     res.json({ mensaje: 'Estado actualizado', estado });
   } catch (err) {

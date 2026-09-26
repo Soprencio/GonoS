@@ -13,15 +13,19 @@ export function useViewer(canvasRef) {
   const progress = ref(0)
   const selectedObject = ref(null)
   const modelInfo = ref({ name: '', type: '', vertices: 0, triangles: 0 })
+  const cameraType = ref('perspective')
+  const isWireframe = ref(false)
 
-  let renderer, scene, camera, controls
+  let renderer, scene, camera, controls, orthoCamera, perspCamera
   let animationId
   let modelGroup = new THREE.Group()
   let thatOpenComponents = null
+  let thatOpenFragments = null
   let selectionHelper = null
   let hiddenObjects = []
   let currentFormat = ''
   const frameCallbacks = []
+  const viewChangeCallbacks = []
 
   function detectWebGL() {
     const canvas = document.createElement('canvas')
@@ -57,13 +61,34 @@ export function useViewer(canvasRef) {
     scene.add(modelGroup)
 
     const aspect = width / height
-    camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000)
-    camera.position.set(4, 3, 5)
+
+    perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000)
+    perspCamera.position.set(4, 3, 5)
+
+    const initialDist = 5
+    const frustum = initialDist * 0.5
+    orthoCamera = new THREE.OrthographicCamera(
+      -frustum * aspect, frustum * aspect,
+      frustum, -frustum,
+      0.1, 1000
+    )
+    orthoCamera.position.copy(perspCamera.position)
+    orthoCamera.quaternion.copy(perspCamera.quaternion)
+    orthoCamera.updateProjectionMatrix()
+
+    camera = perspCamera
 
     controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.12
     controls.target.set(0, 0, 0)
+
+    controls.addEventListener('change', () => {
+      for (const cb of viewChangeCallbacks) cb()
+    })
+    controls.addEventListener('start', () => {
+      stopCameraFlight()
+    })
     controls.update()
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.6)
@@ -81,13 +106,243 @@ export function useViewer(canvasRef) {
     return true
   }
 
+  function toggleCamera() {
+    if (!renderer) return
+    const isPersp = camera === perspCamera
+    const from = camera
+    const to = isPersp ? orthoCamera : perspCamera
+
+    to.position.copy(from.position)
+    to.quaternion.copy(from.quaternion)
+
+    if (to === orthoCamera) {
+      const dist = from.position.distanceTo(controls.target)
+      const aspect = renderer.domElement.width / renderer.domElement.height
+      const f = dist * 0.5
+      to.left = -f * aspect
+      to.right = f * aspect
+      to.top = f
+      to.bottom = -f
+      to.updateProjectionMatrix()
+    }
+
+    controls.object = to
+    camera = to
+    controls.update()
+    cameraType.value = isPersp ? 'orthographic' : 'perspective'
+    for (const cb of viewChangeCallbacks) cb()
+  }
+
+  function getCamera() { return camera }
+  function getControls() { return controls }
+  function onViewChange(cb) {
+    viewChangeCallbacks.push(cb)
+    return () => {
+      const i = viewChangeCallbacks.indexOf(cb)
+      if (i >= 0) viewChangeCallbacks.splice(i, 1)
+    }
+  }
+
+  let animStartPos = null
+  let animTargetPos = null
+  let animStartTarget = null
+  let animTargetTarget = null
+  let animProgress = 0
+  let animDuration = 30
+  let isAnimating = false
+  let animIsSpherical = false
+  let animQStart = new THREE.Quaternion()
+  let animQEnd = new THREE.Quaternion()
+  let animStartDir = new THREE.Vector3()
+  let animStartDist = 1
+  let animTargetDist = 1
+
+  function startCameraFlight({ targetPos, targetControlsTarget, duration = 30 }) {
+    if (!camera || !controls) return
+    animStartPos = camera.position.clone()
+    animTargetPos = targetPos ? targetPos.clone() : null
+    animStartTarget = controls.target.clone()
+    animTargetTarget = targetControlsTarget ? targetControlsTarget.clone() : null
+    animProgress = 0
+    animDuration = Math.max(duration, 1)
+
+    // Spherical orbit interpolation avoids passing through the model center (which collapses distance to 0)
+    if (animTargetPos && animTargetTarget) {
+      const startOffset = animStartPos.clone().sub(animStartTarget)
+      const targetOffset = animTargetPos.clone().sub(animTargetTarget)
+      animStartDist = startOffset.length()
+      animTargetDist = targetOffset.length()
+
+      if (animStartDist > 0.001 && animTargetDist > 0.001) {
+        animStartDir = startOffset.clone().normalize()
+        const targetDir = targetOffset.clone().normalize()
+        const dot = Math.min(Math.max(animStartDir.dot(targetDir), -1), 1)
+
+        animQStart = new THREE.Quaternion()
+        if (dot < -0.9999) {
+          // Exact opposite directions (180 deg): choose an orthogonal axis to rotate cleanly around
+          let rotAxis = new THREE.Vector3(0, 1, 0)
+          if (Math.abs(animStartDir.dot(rotAxis)) > 0.85) {
+            rotAxis = new THREE.Vector3(0, 0, 1)
+          }
+          rotAxis.sub(animStartDir.clone().multiplyScalar(animStartDir.dot(rotAxis))).normalize()
+          animQEnd = new THREE.Quaternion().setFromAxisAngle(rotAxis, Math.PI)
+        } else {
+          animQEnd = new THREE.Quaternion().setFromUnitVectors(animStartDir, targetDir)
+        }
+        animIsSpherical = true
+      } else {
+        animIsSpherical = false
+      }
+    } else {
+      animIsSpherical = false
+    }
+
+    isAnimating = true
+  }
+
+  function stopCameraFlight() {
+    isAnimating = false
+    animStartPos = null
+    animTargetPos = null
+    animStartTarget = null
+    animTargetTarget = null
+    animIsSpherical = false
+  }
+
+  function updateCameraAnimation() {
+    if (!isAnimating) return
+    animProgress++
+    const t = Math.min(animProgress / animDuration, 1)
+    const ease = 1 - Math.pow(1 - t, 3)
+
+    if (animIsSpherical) {
+      const currentQ = new THREE.Quaternion().slerpQuaternions(animQStart, animQEnd, ease)
+      const currentDir = animStartDir.clone().applyQuaternion(currentQ)
+      const currentDist = THREE.MathUtils.lerp(animStartDist, animTargetDist, ease)
+      const currentTarget = new THREE.Vector3().lerpVectors(animStartTarget, animTargetTarget, ease)
+
+      camera.position.copy(currentTarget).add(currentDir.multiplyScalar(currentDist))
+      if (controls) {
+        controls.target.copy(currentTarget)
+      }
+    } else {
+      if (animTargetPos && animStartPos) {
+        camera.position.lerpVectors(animStartPos, animTargetPos, ease)
+      }
+      if (animTargetTarget && animStartTarget && controls) {
+        controls.target.lerpVectors(animStartTarget, animTargetTarget, ease)
+      }
+    }
+
+    camera.up.set(0, 1, 0)
+    if (controls) {
+      controls.object.up.set(0, 1, 0)
+      controls.update()
+    }
+    for (const cb of viewChangeCallbacks) cb()
+
+    if (t >= 1) {
+      if (animTargetPos) camera.position.copy(animTargetPos)
+      if (animTargetTarget && controls) controls.target.copy(animTargetTarget)
+      camera.up.set(0, 1, 0)
+      if (controls) {
+        controls.object.up.set(0, 1, 0)
+        controls.update()
+      }
+      stopCameraFlight()
+      for (const cb of viewChangeCallbacks) cb()
+    }
+  }
+
+  function setViewDirection(dir) {
+    if (!controls || !camera) return
+    const target = controls.target
+    const box = new THREE.Box3().setFromObject(modelGroup)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z, 1)
+    const distance = maxDim * 1.8
+
+    const dx = dir.x
+    const dy = dir.y
+    let dz = dir.z
+    // Avoid polar singularity when looking directly along vertical Y axis
+    if (Math.abs(dx) < 0.0001 && Math.abs(dz) < 0.0001) {
+      dz = dy > 0 ? 0.0001 : -0.0001
+    }
+
+    const direction = new THREE.Vector3(dx, dy, dz).normalize()
+    const targetPos = target.clone().add(direction.multiplyScalar(distance))
+
+    // Always maintain standard Y-up world axis so mouse orbit remains completely predictable
+    camera.up.set(0, 1, 0)
+    if (perspCamera) perspCamera.up.set(0, 1, 0)
+    if (orthoCamera) orthoCamera.up.set(0, 1, 0)
+    controls.object.up.set(0, 1, 0)
+
+    startCameraFlight({
+      targetPos,
+      targetControlsTarget: target,
+      duration: 25
+    })
+  }
+
+  function setCameraPreset(preset) {
+    if (preset === 'isometric') {
+      if (camera !== orthoCamera) {
+        toggleCamera()
+      }
+      setViewDirection({ x: -1, y: -1, z: 1 })
+    }
+  }
+
+  function applyWireframe(root, enabled) {
+    if (!root) return
+    root.traverse(child => {
+      if (child.isMesh && child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => {
+            if (m) m.wireframe = enabled
+          })
+        } else {
+          child.material.wireframe = enabled
+        }
+      }
+    })
+  }
+
+  function setWireframe(enabled) {
+    isWireframe.value = !!enabled
+    applyWireframe(modelGroup, isWireframe.value)
+  }
+
+  function toggleWireframe() {
+    setWireframe(!isWireframe.value)
+  }
+
   function animate() {
     animationId = requestAnimationFrame(animate)
-    controls.update()
-    for (const cb of frameCallbacks) cb()
+    if (!isAnimating && controls) {
+      controls.update()
+    }
+    updateCameraAnimation()
     if (renderer && scene && camera) {
+      if (camera === orthoCamera) {
+        const dist = camera.position.distanceTo(controls.target)
+        const aspect = renderer.domElement.width / renderer.domElement.height
+        const f = dist * 0.5
+        camera.left = -f * aspect
+        camera.right = f * aspect
+        camera.top = f
+        camera.bottom = -f
+        camera.updateProjectionMatrix()
+      }
+      if (thatOpenFragments) {
+        thatOpenFragments.core.update()
+      }
       renderer.render(scene, camera)
     }
+    for (const cb of frameCallbacks) cb()
   }
 
   function clearModel() {
@@ -191,6 +446,7 @@ export function useViewer(canvasRef) {
     try {
       if (format === '.ifc') {
         await loadIFC(url)
+        if (isWireframe.value) applyWireframe(modelGroup, true)
         fitModelToView()
         updateModelInfo()
         return
@@ -198,6 +454,7 @@ export function useViewer(canvasRef) {
 
       if (format === '.obj' && mtlUrl) {
         await loadObjWithMtl(url, mtlUrl, extraMap)
+        if (isWireframe.value) applyWireframe(modelGroup, true)
         updateModelInfo()
         fitModelToView()
         return
@@ -224,7 +481,12 @@ export function useViewer(canvasRef) {
 
       const object = await loadWithLoader(loader, url)
 
-      if (format === '.gltf' || format === '.glb') {
+      if (format === '.stl') {
+        const mat = new THREE.MeshStandardMaterial({ color: 0xbbbbbb, roughness: 0.6, metalness: 0.1 })
+        const mesh = new THREE.Mesh(object, mat)
+        mesh.name = 'Modelo.stl'
+        modelGroup.add(mesh)
+      } else if (format === '.gltf' || format === '.glb') {
         const scene2 = object.scene || object
         scene2.name = scene2.name || 'Modelo GLTF'
         modelGroup.add(scene2)
@@ -234,6 +496,7 @@ export function useViewer(canvasRef) {
         modelGroup.add(container)
       }
 
+      if (isWireframe.value) applyWireframe(modelGroup, true)
       updateModelInfo()
       fitModelToView()
     } catch (err) {
@@ -326,20 +589,29 @@ export function useViewer(canvasRef) {
 
   async function loadIFC(url) {
     const mod = await import('@thatopen/components')
-    const { Components, IfcLoader } = mod
+    const { Components, IfcLoader, FragmentsManager } = mod
 
     const components = new Components()
     thatOpenComponents = components
 
+    const fragments = components.get(FragmentsManager)
+    fragments.init(await FragmentsManager.getWorker())
+    thatOpenFragments = fragments
+
     const ifcLoader = new IfcLoader(components)
-    await ifcLoader.setup({ autoSetWasm: true })
+    ifcLoader.settings.wasm.path = '/'
+    ifcLoader.settings.wasm.absolute = true
+    await ifcLoader.setup({ autoSetWasm: false })
 
     const response = await fetch(url)
-    const buffer = await response.arrayBuffer()
+    if (!response.ok) {
+      throw new Error(`Error al descargar el archivo (${response.status})`)
+    }
+    const buffer = new Uint8Array(await response.arrayBuffer())
 
     const model = await ifcLoader.load(buffer, true, 'model')
-    model.name = 'Modelo IFC'
-    modelGroup.add(model)
+    model.object.name = 'Modelo IFC'
+    modelGroup.add(model.object)
   }
 
   function extractHierarchy() {
@@ -410,13 +682,33 @@ export function useViewer(canvasRef) {
     }
   }
 
+  function selectUuid(id) {
+    if (!id) {
+      deselectAll()
+      return
+    }
+    let found = null
+    modelGroup.traverse(child => {
+      if (!found && child.uuid === id) found = child
+    })
+    if (found) selectObject(found)
+  }
+
   function isolateSelection() {
     if (!selectedObject.value) return
     hiddenObjects = []
     const selected = selectedObject.value
+    const keep = new Set()
+    if (selected.isMesh) {
+      keep.add(selected)
+    } else if (selected.traverse) {
+      selected.traverse(child => {
+        if (child.isMesh) keep.add(child)
+      })
+    }
 
     modelGroup.traverse(child => {
-      if (child !== selected && child.isMesh) {
+      if (child.isMesh && !keep.has(child)) {
         child.visible = false
         hiddenObjects.push(child)
       }
@@ -443,10 +735,33 @@ export function useViewer(canvasRef) {
     camera.position.set(center.x + dist * 0.6, center.y + dist * 0.5, center.z + dist)
     controls.target.copy(center)
     controls.update()
+
+    if (orthoCamera) {
+      orthoCamera.position.copy(camera.position)
+      orthoCamera.quaternion.copy(camera.quaternion)
+    }
   }
 
   function resetCamera() {
-    fitModelToView()
+    if (modelGroup.children.length === 0) return
+    const box = new THREE.Box3().setFromObject(modelGroup)
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z)
+
+    if (maxDim === 0) return
+
+    const dist = maxDim * 1.8
+    const targetPos = new THREE.Vector3(center.x + dist * 0.6, center.y + dist * 0.5, center.z + dist)
+
+    camera.up.set(0, 1, 0)
+    if (controls) controls.object.up.set(0, 1, 0)
+
+    startCameraFlight({
+      targetPos,
+      targetControlsTarget: center,
+      duration: 30
+    })
   }
 
   function raycast(event) {
@@ -470,8 +785,12 @@ export function useViewer(canvasRef) {
   }
 
   function projectToScreen(worldPos) {
-    if (!camera || !renderer) return null
-    const vec = new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z)
+    if (!camera || !renderer || !worldPos) return null
+    const px = Number(worldPos.x)
+    const py = Number(worldPos.y)
+    const pz = Number(worldPos.z)
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) return null
+    const vec = new THREE.Vector3(px, py, pz)
     vec.project(camera)
     if (vec.z > 1) return null
     const rect = renderer.domElement.getBoundingClientRect()
@@ -483,8 +802,40 @@ export function useViewer(canvasRef) {
   }
 
   function focusOnPoint(worldPos) {
-    controls.target.set(worldPos.x, worldPos.y, worldPos.z)
-    controls.update()
+    if (!camera || !controls || !worldPos) return
+
+    const px = Number(worldPos.x)
+    const py = Number(worldPos.y)
+    const pz = Number(worldPos.z)
+    if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) return
+
+    const targetCenter = new THREE.Vector3(px, py, pz)
+    const box = new THREE.Box3().setFromObject(modelGroup)
+    const size = box.getSize(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z, 1)
+
+    const offset = new THREE.Vector3().subVectors(camera.position, controls.target)
+    let currentDist = offset.length()
+    if (!Number.isFinite(currentDist) || currentDist < 0.001) {
+      currentDist = maxDim * 1.5
+      offset.set(0.6, 0.5, 1).normalize()
+    } else {
+      offset.normalize()
+    }
+
+    const targetDist = Math.max(Math.min(currentDist, maxDim * 1.2), maxDim * 0.3)
+    const targetCameraPos = targetCenter.clone().add(offset.multiplyScalar(targetDist))
+
+    camera.up.set(0, 1, 0)
+    if (perspCamera) perspCamera.up.set(0, 1, 0)
+    if (orthoCamera) orthoCamera.up.set(0, 1, 0)
+    if (controls) controls.object.up.set(0, 1, 0)
+
+    startCameraFlight({
+      targetPos: targetCameraPos,
+      targetControlsTarget: targetCenter,
+      duration: 30
+    })
   }
 
   function getCanvasRect() {
@@ -533,6 +884,7 @@ export function useViewer(canvasRef) {
     selectedObject,
     modelInfo,
     selectObject,
+    selectUuid,
     deselectAll,
     isolateSelection,
     showAll,
@@ -541,6 +893,16 @@ export function useViewer(canvasRef) {
     registerFrameCallback,
     projectToScreen,
     focusOnPoint,
-    getCanvasRect
+    getCanvasRect,
+    getCamera,
+    getControls,
+    onViewChange,
+    toggleCamera,
+    setViewDirection,
+    setCameraPreset,
+    cameraType,
+    isWireframe,
+    toggleWireframe,
+    setWireframe
   }
 }
