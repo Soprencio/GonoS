@@ -63,8 +63,13 @@ if (savedToken && savedUser) {
     const api = useApi()
     api.get('/auth/me')
       .then(res => {
-        authState.user = res.data
-        persist(authState.token, res.data)
+        const mergedUser = {
+          ...savedUser,
+          ...res.data,
+          picture: res.data.picture || savedUser?.picture || null
+        }
+        authState.user = mergedUser
+        persist(authState.token, mergedUser)
       })
       .catch(() => {
         authState.logout()

@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const pool = require('../database/connection');
+const { callSp } = require('../database/connection');
 const { requireAuth } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/sanitize');
 
@@ -19,7 +19,7 @@ function generateCode() {
 async function generateUniqueCode() {
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = generateCode();
-    const [rows] = await pool.execute('SELECT clase_id FROM clases WHERE codigo = ?', [code]);
+    const rows = await callSp('sp_verificar_codigo_clase', [code]);
     if (rows.length === 0) return code;
   }
   throw new Error('No se pudo generar un código único');
@@ -28,17 +28,7 @@ async function generateUniqueCode() {
 // GET /api/clases — listar clases del usuario autenticado
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      `SELECT c.clase_id, c.nombre, c.descripcion, c.codigo, c.created_at,
-              r.nombre AS rol,
-              (SELECT COUNT(*) FROM trabajos WHERE clase_id = c.clase_id) AS cantidad_trabajos
-       FROM clases c
-       JOIN participaciones p ON c.clase_id = p.clase_id
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.usuario_id = ?
-       ORDER BY c.created_at DESC`,
-      [req.user.id]
-    );
+    const rows = await callSp('sp_listar_clases_usuario', [req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error('Error al listar clases:', err);
@@ -60,76 +50,46 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(500).json({ error: 'Error generando código de invitación' });
   }
 
-  const conn = await pool.getConnection();
+  const nombreSaneado = sanitizeText(nombre.trim());
+  const descSaneado = descripcion ? sanitizeText(descripcion.trim()) : null;
+
   try {
-    await conn.beginTransaction();
+    const result = await callSp('sp_crear_clase', [req.user.id, nombreSaneado, descSaneado, codigo]);
+    const nuevaClaseId = result[0].clase_id;
 
-    const nombreSaneado = sanitizeText(nombre.trim());
-    const descSaneado = descripcion ? sanitizeText(descripcion.trim()) : null;
-
-    const [claseResult] = await conn.execute(
-      'INSERT INTO clases (nombre, descripcion, codigo) VALUES (?, ?, ?)',
-      [nombreSaneado, descSaneado, codigo]
-    );
-
-      await conn.execute(
-        'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 1)',
-        [req.user.id, claseResult.insertId]
-      );
-
-      await conn.commit();
-
-      res.status(201).json({
-        clase_id: claseResult.insertId,
-        nombre: nombreSaneado,
-        descripcion: descSaneado,
-        codigo,
-        rol: 'Creador'
-      });
+    res.status(201).json({
+      clase_id: nuevaClaseId,
+      nombre: nombreSaneado,
+      descripcion: descSaneado,
+      codigo,
+      rol: 'Creador'
+    });
   } catch (err) {
-    await conn.rollback();
-    // Si el error es por código duplicado (UNIQUE), reintentar
     if (err.code === 'ER_DUP_ENTRY') {
       try {
         codigo = await generateUniqueCode();
-        const nombreSaneado = sanitizeText(nombre.trim());
-        const descSaneado = descripcion ? sanitizeText(descripcion.trim()) : null;
-        const [claseResult] = await conn.execute(
-          'INSERT INTO clases (nombre, descripcion, codigo) VALUES (?, ?, ?)',
-          [nombreSaneado, descSaneado, codigo]
-        );
-        await conn.execute(
-          'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 1)',
-          [req.user.id, claseResult.insertId]
-        );
-        await conn.commit();
+        const retryResult = await callSp('sp_crear_clase', [req.user.id, nombreSaneado, descSaneado, codigo]);
         return res.status(201).json({
-          clase_id: claseResult.insertId,
+          clase_id: retryResult[0].clase_id,
           nombre: nombreSaneado,
           descripcion: descSaneado,
           codigo,
           rol: 'Creador'
         });
       } catch (retryErr) {
-        await conn.rollback();
         console.error('Error al crear clase (reintento):', retryErr);
         return res.status(500).json({ error: 'Error interno del servidor' });
       }
     }
     console.error('Error al crear clase:', err);
     res.status(500).json({ error: 'Error interno del servidor' });
-  } finally {
-    conn.release();
   }
 });
 
 // GET /api/clases/codigo/:codigo — buscar clase por código (para unirse)
 router.get('/codigo/:codigo', requireAuth, async (req, res) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT clase_id, nombre FROM clases WHERE codigo = ?',
-      [req.params.codigo.toUpperCase().trim()]
-    );
+    const rows = await callSp('sp_verificar_codigo_clase', [req.params.codigo.toUpperCase().trim()]);
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Código de invitación inválido' });
     }
@@ -143,27 +103,12 @@ router.get('/codigo/:codigo', requireAuth, async (req, res) => {
 // GET /api/clases/:claseId/participantes — listar participantes agrupados por rol
 router.get('/:claseId/participantes', requireAuth, async (req, res) => {
   try {
-    const [miPart] = await pool.execute(
-      `SELECT r.nombre AS rol FROM participaciones p
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.usuario_id = ? AND p.clase_id = ?`,
-      [req.user.id, req.params.claseId]
-    );
+    const miPart = await callSp('sp_obtener_participacion', [req.user.id, req.params.claseId]);
     if (miPart.length === 0) {
       return res.status(403).json({ error: 'No tenés acceso a esta clase' });
     }
 
-    const [rows] = await pool.execute(
-      `SELECT p.participacion_id, p.rol_id, p.created_at AS fecha_ingreso,
-              r.nombre AS rol,
-              u.usuario_id, u.nombre, u.apellido, u.mail
-       FROM participaciones p
-       JOIN usuarios u ON p.usuario_id = u.usuario_id
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.clase_id = ?
-       ORDER BY r.rol_id, u.apellido, u.nombre`,
-      [req.params.claseId]
-    );
+    const rows = await callSp('sp_listar_participantes_clase', [req.params.claseId]);
 
     const creador = rows.filter(r => r.rol === 'Creador');
     const profesores = rows.filter(r => r.rol === 'Profesor');
@@ -184,24 +129,14 @@ router.get('/:claseId/participantes', requireAuth, async (req, res) => {
 // DELETE /api/clases/:claseId/participantes/:participacionId — sacar participante
 router.delete('/:claseId/participantes/:participacionId', requireAuth, async (req, res) => {
   try {
-    const [miPart] = await pool.execute(
-      `SELECT r.nombre AS rol FROM participaciones p
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.usuario_id = ? AND p.clase_id = ?`,
-      [req.user.id, req.params.claseId]
-    );
+    const miPart = await callSp('sp_obtener_participacion', [req.user.id, req.params.claseId]);
     if (miPart.length === 0) {
       return res.status(403).json({ error: 'No tenés acceso a esta clase' });
     }
 
     const miRol = miPart[0].rol;
 
-    const [targetPart] = await pool.execute(
-      `SELECT r.nombre AS rol FROM participaciones p
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.participacion_id = ? AND p.clase_id = ?`,
-      [req.params.participacionId, req.params.claseId]
-    );
+    const targetPart = await callSp('sp_obtener_participante_por_id', [req.params.participacionId, req.params.claseId]);
     if (targetPart.length === 0) {
       return res.status(404).json({ error: 'Participante no encontrado' });
     }
@@ -217,7 +152,7 @@ router.delete('/:claseId/participantes/:participacionId', requireAuth, async (re
       }
     }
 
-    await pool.execute('DELETE FROM participaciones WHERE participacion_id = ?', [req.params.participacionId]);
+    await callSp('sp_eliminar_participante', [req.params.participacionId]);
     res.json({ mensaje: 'Participante eliminado' });
   } catch (err) {
     console.error('Error al eliminar participante:', err);
@@ -228,36 +163,19 @@ router.delete('/:claseId/participantes/:participacionId', requireAuth, async (re
 // GET /api/clases/:id — detalle de una clase
 router.get('/:id', requireAuth, async (req, res) => {
   try {
-    const [participaciones] = await pool.execute(
-      `SELECT p.participacion_id, p.rol_id, r.nombre AS rol
-       FROM participaciones p
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.usuario_id = ? AND p.clase_id = ?`,
-      [req.user.id, req.params.id]
-    );
+    const participaciones = await callSp('sp_obtener_participacion', [req.user.id, req.params.id]);
 
     if (participaciones.length === 0) {
       return res.status(403).json({ error: 'No tenés acceso a esta clase' });
     }
 
-    const [clases] = await pool.execute(
-      `SELECT c.clase_id, c.nombre, c.descripcion,
-              CASE WHEN ? IN (1, 2) THEN c.codigo ELSE NULL END AS codigo,
-              c.created_at,
-              (SELECT COUNT(*) FROM trabajos WHERE clase_id = c.clase_id) AS cantidad_trabajos
-       FROM clases c
-       WHERE c.clase_id = ?`,
-      [participaciones[0].rol_id, req.params.id]
-    );
+    const clases = await callSp('sp_obtener_clase_detalle', [req.params.id, participaciones[0].rol_id]);
 
     if (clases.length === 0) {
       return res.status(404).json({ error: 'Clase no encontrada' });
     }
 
-    const [trabajos] = await pool.execute(
-      'SELECT tp_id, descripcion, fecha_entrega, formatos_aceptados, created_at FROM trabajos WHERE clase_id = ? ORDER BY created_at DESC',
-      [req.params.id]
-    );
+    const trabajos = await callSp('sp_listar_trabajos_resumen_clase', [req.params.id]);
 
     res.json({ ...clases[0], rol: participaciones[0].rol, trabajos });
   } catch (err) {
@@ -274,57 +192,21 @@ router.post('/:id/unirse', requireAuth, async (req, res) => {
   }
 
   try {
-    const [clases] = await pool.execute(
-      'SELECT clase_id, nombre, codigo FROM clases WHERE clase_id = ?',
-      [req.params.id]
-    );
+    const clases = await callSp('sp_verificar_codigo_clase', [codigo.toUpperCase().trim()]);
 
-    if (clases.length === 0) {
+    if (clases.length === 0 || clases[0].clase_id !== parseInt(req.params.id, 10)) {
       return res.status(400).json({ error: 'Código de invitación inválido' });
     }
 
-    if (clases[0].codigo !== codigo.toUpperCase().trim()) {
-      return res.status(400).json({ error: 'Código de invitación inválido' });
-    }
-
-    const [existentes] = await pool.execute(
-      'SELECT participacion_id FROM participaciones WHERE usuario_id = ? AND clase_id = ?',
-      [req.user.id, req.params.id]
-    );
+    const existentes = await callSp('sp_obtener_participacion', [req.user.id, req.params.id]);
 
     if (existentes.length > 0) {
       return res.status(409).json({ error: 'Ya estás participando en esta clase' });
     }
 
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
+    await callSp('sp_unirse_clase', [req.user.id, req.params.id]);
 
-      const [partResult] = await conn.execute(
-        'INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (?, ?, 3)',
-        [req.user.id, req.params.id]
-      );
-
-      // Generar asignaciones pendientes para trabajos ya existentes
-      const [trabajos] = await conn.execute(
-        'SELECT tp_id FROM trabajos WHERE clase_id = ?',
-        [req.params.id]
-      );
-      for (const t of trabajos) {
-        await conn.execute(
-          'INSERT INTO asignacion (tp_id, participacion_id) VALUES (?, ?)',
-          [t.tp_id, partResult.insertId]
-        );
-      }
-
-      await conn.commit();
-      res.status(201).json({ mensaje: 'Te uniste a la clase', clase: clases[0].nombre });
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
-    }
+    res.status(201).json({ mensaje: 'Te uniste a la clase', clase: clases[0].nombre });
   } catch (err) {
     console.error('Error al unirse a clase:', err);
     res.status(500).json({ error: 'Error interno del servidor' });

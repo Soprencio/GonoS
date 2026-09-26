@@ -1,18 +1,12 @@
 const { Router } = require('express');
-const pool = require('../database/connection');
+const { callSp } = require('../database/connection');
 const { requireAuth } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/sanitize');
 
 const router = Router();
 
 async function getParticipacion(usuarioId, claseId) {
-  const [rows] = await pool.execute(
-    `SELECT p.participacion_id, r.nombre AS rol
-     FROM participaciones p
-     JOIN roles r ON p.rol_id = r.rol_id
-     WHERE p.usuario_id = ? AND p.clase_id = ?`,
-    [usuarioId, claseId]
-  );
+  const rows = await callSp('sp_obtener_participacion', [usuarioId, claseId]);
   return rows[0] || null;
 }
 
@@ -24,16 +18,7 @@ router.get('/clases/:claseId/publicaciones', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'No tenés acceso a esta clase' });
     }
 
-    const [rows] = await pool.execute(
-      `SELECT p.publicacion_id, p.mensaje, p.created_at,
-              u.nombre AS profe_nombre, u.apellido AS profe_apellido
-       FROM publicaciones p
-       JOIN participaciones pp ON p.participacion_id = pp.participacion_id
-       JOIN usuarios u ON pp.usuario_id = u.usuario_id
-       WHERE p.clase_id = ?
-       ORDER BY p.created_at DESC`,
-      [req.params.claseId]
-    );
+    const rows = await callSp('sp_listar_publicaciones_clase', [req.params.claseId]);
 
     res.json(rows.map(r => ({
       publicacion_id: r.publicacion_id,
@@ -66,20 +51,11 @@ router.post('/clases/:claseId/publicaciones', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Solo el profesor puede publicar en esta clase' });
     }
 
-    const [result] = await pool.execute(
-      'INSERT INTO publicaciones (clase_id, participacion_id, mensaje) VALUES (?, ?, ?)',
-      [req.params.claseId, participacion.participacion_id, mensajeSaneado]
-    );
-
-    const [rows] = await pool.execute(
-      `SELECT p.publicacion_id, p.mensaje, p.created_at,
-              u.nombre AS profe_nombre, u.apellido AS profe_apellido
-       FROM publicaciones p
-       JOIN participaciones pp ON p.participacion_id = pp.participacion_id
-       JOIN usuarios u ON pp.usuario_id = u.usuario_id
-       WHERE p.publicacion_id = ?`,
-      [result.insertId]
-    );
+    const rows = await callSp('sp_crear_publicacion_clase', [
+      req.params.claseId,
+      participacion.participacion_id,
+      mensajeSaneado
+    ]);
 
     const pub = rows[0];
     res.status(201).json({

@@ -6,6 +6,7 @@ import { useApi } from '../composables/useApi.js'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import AccentToggle from '../components/AccentToggle.vue'
 import GonosHeroViewer from '../components/GonosHeroViewer.vue'
+import GoogleAuthButton from '../components/GoogleAuthButton.vue'
 
 const router = useRouter()
 const api = useApi()
@@ -111,6 +112,8 @@ async function handleSubmit() {
               {{ loading ? 'Creando cuenta...' : 'Crear cuenta' }}
             </button>
           </form>
+
+          <GoogleAuthButton @error="msg => (error = msg)" />
 
           <p class="footer-text">
             ¿Ya tenés cuenta?

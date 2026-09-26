@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const pool = require('../database/connection');
+const { callSp } = require('../database/connection');
 const { requireAuth } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/sanitize');
 
@@ -7,13 +7,7 @@ const router = Router();
 
 // ── Helpers ──
 async function getParticipacion(usuarioId, claseId) {
-  const [rows] = await pool.execute(
-    `SELECT p.participacion_id, r.nombre AS rol
-     FROM participaciones p
-     JOIN roles r ON p.rol_id = r.rol_id
-     WHERE p.usuario_id = ? AND p.clase_id = ?`,
-    [usuarioId, claseId]
-  );
+  const rows = await callSp('sp_obtener_participacion', [usuarioId, claseId]);
   return rows[0] || null;
 }
 
@@ -25,15 +19,7 @@ router.get('/clases/:claseId/alumnos', requireAuth, async (req, res) => {
   }
 
   try {
-    const [alumnos] = await pool.execute(
-      `SELECT p.participacion_id, u.usuario_id, u.nombre, u.apellido, u.mail
-       FROM participaciones p
-       JOIN usuarios u ON p.usuario_id = u.usuario_id
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.clase_id = ? AND r.nombre = 'Alumno'
-       ORDER BY u.apellido, u.nombre`,
-      [req.params.claseId]
-    );
+    const alumnos = await callSp('sp_listar_alumnos_clase', [req.params.claseId]);
     res.json(alumnos);
   } catch (err) {
     console.error('Error al listar alumnos:', err);
@@ -78,29 +64,27 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Debe seleccionar al menos un alumno' });
   }
 
-  const conn = await pool.getConnection();
   try {
-    await conn.beginTransaction();
-
     const descSaneada = sanitizeText(descripcion.trim());
 
-    const [tpResult] = await conn.execute(
-      'INSERT INTO trabajos (clase_id, participacion_id, descripcion, fecha_entrega, formatos_aceptados, nota_minima) VALUES (?, ?, ?, ?, ?, ?)',
-      [req.params.claseId, participacion.participacion_id, descSaneada, fecha, JSON.stringify(formatos_aceptados), notaMinima]
-    );
+    const tpResult = await callSp('sp_crear_trabajo', [
+      req.params.claseId,
+      participacion.participacion_id,
+      descSaneada,
+      fecha,
+      JSON.stringify(formatos_aceptados),
+      notaMinima
+    ]);
+
+    const nuevoTpId = tpResult[0].tp_id;
 
     for (const participacionId of alumnos_ids) {
-      await conn.execute(
-        'INSERT INTO asignacion (tp_id, participacion_id) VALUES (?, ?)',
-        [tpResult.insertId, participacionId]
-      );
+      await callSp('sp_crear_asignacion', [nuevoTpId, participacionId]);
     }
 
-    await conn.commit();
-
     res.status(201).json({
-      tp_id: tpResult.insertId,
-      clase_id: parseInt(req.params.claseId),
+      tp_id: nuevoTpId,
+      clase_id: parseInt(req.params.claseId, 10),
       descripcion: descSaneada,
       fecha_entrega: fecha,
       formatos_aceptados,
@@ -108,11 +92,8 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
       alumnos_asignados: alumnos_ids.length
     });
   } catch (err) {
-    await conn.rollback();
     console.error('Error al crear trabajo:', err);
     res.status(500).json({ error: 'Error interno del servidor' });
-  } finally {
-    conn.release();
   }
 });
 
@@ -121,10 +102,7 @@ router.post('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
 // GET /api/trabajos/:trabajoId/comentarios-publicos — listar comentarios (más viejo primero)
 router.get('/trabajos/:trabajoId/comentarios-publicos', requireAuth, async (req, res) => {
   try {
-    const [tps] = await pool.execute(
-      'SELECT clase_id FROM trabajos WHERE tp_id = ?',
-      [req.params.trabajoId]
-    );
+    const tps = await callSp('sp_obtener_trabajo_simple', [req.params.trabajoId]);
     if (tps.length === 0) {
       return res.status(404).json({ error: 'Trabajo no encontrado' });
     }
@@ -134,17 +112,7 @@ router.get('/trabajos/:trabajoId/comentarios-publicos', requireAuth, async (req,
       return res.status(403).json({ error: 'No tenés acceso a este trabajo' });
     }
 
-    const [rows] = await pool.execute(
-      `SELECT c.comentario_publico_id, c.mensaje, c.created_at,
-              u.nombre, u.apellido, r.nombre AS rol
-       FROM comentario_publico c
-       JOIN participaciones p ON c.participacion_id = p.participacion_id
-       JOIN usuarios u ON p.usuario_id = u.usuario_id
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE c.tp_id = ?
-       ORDER BY c.created_at ASC`,
-      [req.params.trabajoId]
-    );
+    const rows = await callSp('sp_listar_comentarios_publicos', [req.params.trabajoId]);
 
     res.json(rows.map(r => ({
       id: r.comentario_publico_id,
@@ -173,10 +141,7 @@ router.post('/trabajos/:trabajoId/comentarios-publicos', requireAuth, async (req
   }
 
   try {
-    const [tps] = await pool.execute(
-      'SELECT clase_id FROM trabajos WHERE tp_id = ?',
-      [req.params.trabajoId]
-    );
+    const tps = await callSp('sp_obtener_trabajo_simple', [req.params.trabajoId]);
     if (tps.length === 0) {
       return res.status(404).json({ error: 'Trabajo no encontrado' });
     }
@@ -186,21 +151,11 @@ router.post('/trabajos/:trabajoId/comentarios-publicos', requireAuth, async (req
       return res.status(403).json({ error: 'No tenés acceso a este trabajo' });
     }
 
-    const [result] = await pool.execute(
-      'INSERT INTO comentario_publico (tp_id, participacion_id, mensaje) VALUES (?, ?, ?)',
-      [req.params.trabajoId, participacion.participacion_id, mensajeSaneado]
-    );
-
-    const [rows] = await pool.execute(
-      `SELECT c.comentario_publico_id, c.mensaje, c.created_at,
-              u.nombre, u.apellido, r.nombre AS rol
-       FROM comentario_publico c
-       JOIN participaciones p ON c.participacion_id = p.participacion_id
-       JOIN usuarios u ON p.usuario_id = u.usuario_id
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE c.comentario_publico_id = ?`,
-      [result.insertId]
-    );
+    const rows = await callSp('sp_crear_comentario_publico', [
+      req.params.trabajoId,
+      participacion.participacion_id,
+      mensajeSaneado
+    ]);
 
     const pub = rows[0];
     res.status(201).json({
@@ -225,33 +180,14 @@ router.get('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
 
   try {
     if (participacion.rol === 'Profesor' || participacion.rol === 'Creador') {
-      const [trabajos] = await pool.execute(
-        `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.formatos_aceptados, t.nota_minima, t.created_at, t.participacion_id,
-                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id) AS total_alumnos,
-                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Pendiente') AS pendientes,
-                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'En revisión') AS en_revision,
-                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Desaprobado') AS desaprobados,
-                (SELECT COUNT(*) FROM asignacion WHERE tp_id = t.tp_id AND estado = 'Aprobado') AS aprobados
-         FROM trabajos t
-         WHERE t.clase_id = ?
-         ORDER BY t.created_at DESC`,
-        [req.params.claseId]
-      );
+      const trabajos = await callSp('sp_listar_trabajos_docente', [req.params.claseId]);
       res.json(trabajos.map(t => ({
         ...t,
         formatos_aceptados: typeof t.formatos_aceptados === 'string' ? JSON.parse(t.formatos_aceptados) : t.formatos_aceptados,
         puedeCalificar: participacion.rol === 'Creador' || t.participacion_id === participacion.participacion_id
       })));
     } else {
-      const [trabajos] = await pool.execute(
-        `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.formatos_aceptados, t.nota_minima, t.created_at,
-                a.estado, a.nota, a.asignacion_id
-         FROM trabajos t
-         JOIN asignacion a ON t.tp_id = a.tp_id
-         WHERE t.clase_id = ? AND a.participacion_id = ?
-         ORDER BY t.created_at DESC`,
-        [req.params.claseId, participacion.participacion_id]
-      );
+      const trabajos = await callSp('sp_listar_trabajos_alumno', [req.params.claseId, participacion.participacion_id]);
       res.json(trabajos.map(t => ({
         ...t,
         formatos_aceptados: typeof t.formatos_aceptados === 'string' ? JSON.parse(t.formatos_aceptados) : t.formatos_aceptados
@@ -266,13 +202,7 @@ router.get('/clases/:claseId/trabajos', requireAuth, async (req, res) => {
 // GET /api/trabajos/:id — detalle de un trabajo
 router.get('/trabajos/:id', requireAuth, async (req, res) => {
   try {
-    const [tps] = await pool.execute(
-      `SELECT t.*, c.clase_id, c.nombre AS clase_nombre
-       FROM trabajos t
-       JOIN clases c ON t.clase_id = c.clase_id
-       WHERE t.tp_id = ?`,
-      [req.params.id]
-    );
+    const tps = await callSp('sp_obtener_trabajo_detalle', [req.params.id]);
 
     if (tps.length === 0) {
       return res.status(404).json({ error: 'Trabajo no encontrado' });
@@ -301,14 +231,7 @@ router.get('/trabajos/:id', requireAuth, async (req, res) => {
     };
 
     if (participacion.rol === 'Alumno') {
-      const [asig] = await pool.execute(
-        `SELECT a.asignacion_id, a.estado, a.nota,
-                (SELECT e.entrega_id FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS entrega_id,
-                (SELECT e.fecha_entrega FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS fecha_entrega_alumno
-         FROM asignacion a
-         WHERE a.tp_id = ? AND a.participacion_id = ?`,
-        [req.params.id, participacion.participacion_id]
-      );
+      const asig = await callSp('sp_obtener_asignacion_alumno', [req.params.id, participacion.participacion_id]);
       result.asignacion = asig[0] || null;
     }
 
@@ -327,34 +250,17 @@ router.get('/usuarios/:usuarioId/trabajos', requireAuth, async (req, res) => {
   }
 
   try {
-    const [miPart] = await pool.execute(
-      `SELECT r.nombre AS rol FROM participaciones p
-       JOIN roles r ON p.rol_id = r.rol_id
-       WHERE p.usuario_id = ? AND p.clase_id = ?`,
-      [req.user.id, clase_id]
-    );
+    const miPart = await callSp('sp_obtener_participacion', [req.user.id, clase_id]);
     if (!miPart.length || (miPart[0].rol !== 'Profesor' && miPart[0].rol !== 'Creador')) {
       return res.status(403).json({ error: 'No tenés permiso para ver esta información' });
     }
 
-    const [alumnoPart] = await pool.execute(
-      'SELECT participacion_id FROM participaciones WHERE usuario_id = ? AND clase_id = ?',
-      [req.params.usuarioId, clase_id]
-    );
+    const alumnoPart = await callSp('sp_obtener_participacion', [req.params.usuarioId, clase_id]);
     if (!alumnoPart.length) {
       return res.status(404).json({ error: 'El alumno no pertenece a esta clase' });
     }
 
-    const [rows] = await pool.execute(
-      `SELECT t.tp_id, t.descripcion, t.fecha_entrega, t.nota_minima,
-              a.asignacion_id, a.nota, a.estado,
-              (SELECT e.entrega_id FROM entrega e WHERE e.asignacion_id = a.asignacion_id ORDER BY e.created_at DESC LIMIT 1) AS entrega_id
-       FROM trabajos t
-       JOIN asignacion a ON t.tp_id = a.tp_id
-       WHERE t.clase_id = ? AND a.participacion_id = ?
-       ORDER BY t.fecha_entrega ASC`,
-      [clase_id, alumnoPart[0].participacion_id]
-    );
+    const rows = await callSp('sp_listar_trabajos_alumno_perfil', [clase_id, alumnoPart[0].participacion_id]);
 
     res.json(rows.map(r => ({
       tp_id: r.tp_id,

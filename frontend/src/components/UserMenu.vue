@@ -1,24 +1,38 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { authState } from '../state/auth.js'
 
 const router = useRouter()
 const isOpen = ref(false)
 const menuRef = ref(null)
+const imgError = ref(false)
+
+const userPicture = computed(() => authState.user?.picture || null)
+
+watch(userPicture, () => {
+  imgError.value = false
+})
 
 const userInitials = computed(() => {
   const u = authState.user
   if (!u) return 'U'
   const first = u.nombre?.charAt(0) || ''
-  const last = u.apellido?.charAt(0) || ''
+  const last = u.apellido && u.apellido !== '-' ? u.apellido.charAt(0) : ''
   return (first + last).toUpperCase() || 'U'
 })
 
 const displayName = computed(() => {
   const u = authState.user
   if (!u) return 'Usuario'
-  return `${u.nombre || ''} ${u.apellido || ''}`.trim() || u.email || 'Usuario'
+  const first = u.nombre || ''
+  const last = u.apellido && u.apellido !== '-' ? u.apellido : ''
+  return `${first} ${last}`.trim() || u.mail || u.email || 'Usuario'
+})
+
+const displayEmail = computed(() => {
+  const u = authState.user
+  return u?.mail || u?.email || ''
 })
 
 function toggleMenu() {
@@ -75,7 +89,15 @@ onUnmounted(() => {
       aria-haspopup="true"
       @click="toggleMenu"
     >
-      <span class="avatar-circle font-mono">
+      <img
+        v-if="userPicture && !imgError"
+        :src="userPicture"
+        :alt="displayName"
+        class="avatar-img"
+        referrerpolicy="no-referrer"
+        @error="imgError = true"
+      />
+      <span v-else class="avatar-circle font-mono">
         {{ userInitials }}
       </span>
       <svg
@@ -99,13 +121,21 @@ onUnmounted(() => {
     <div v-if="isOpen" class="user-popup" role="menu">
       <!-- Encabezado con información del usuario si está logueado -->
       <div v-if="authState.isLoggedIn" class="user-header">
+        <img
+          v-if="userPicture && !imgError"
+          :src="userPicture"
+          :alt="displayName"
+          class="header-avatar-img"
+          referrerpolicy="no-referrer"
+          @error="imgError = true"
+        />
+        <span v-else class="header-avatar-circle font-mono">
+          {{ userInitials }}
+        </span>
         <div class="user-meta">
           <p class="user-name">{{ displayName }}</p>
-          <p v-if="authState.user?.email" class="user-email">{{ authState.user.email }}</p>
+          <p v-if="displayEmail" class="user-email">{{ displayEmail }}</p>
         </div>
-        <span class="user-role-badge">
-          {{ authState.user?.rol === 'profesor' ? 'Docente' : 'Alumno' }}
-        </span>
       </div>
 
       <div v-if="authState.isLoggedIn" class="user-menu-divider" role="separator"></div>
@@ -217,6 +247,14 @@ onUnmounted(() => {
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
+.avatar-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
 .avatar-circle {
   width: 24px;
   height: 24px;
@@ -246,7 +284,7 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 210px;
+  min-width: 220px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -272,13 +310,36 @@ onUnmounted(() => {
 .user-header {
   padding: 8px 14px 6px;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-avatar-img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+}
+
+.header-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .user-meta {
   min-width: 0;
+  flex: 1;
 }
 
 .user-name {
@@ -298,18 +359,6 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.user-role-badge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
 }
 
 /* Separador */

@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const pool = require('../database/connection');
+const { callSp } = require('../database/connection');
 const { requireAuth } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/sanitize');
 
@@ -8,25 +8,12 @@ const router = Router();
 // ── Helpers ──
 
 async function getParticipacion(usuarioId, claseId) {
-  const [rows] = await pool.execute(
-    `SELECT p.participacion_id, r.nombre AS rol
-     FROM participaciones p
-     JOIN roles r ON p.rol_id = r.rol_id
-     WHERE p.usuario_id = ? AND p.clase_id = ?`,
-    [usuarioId, claseId]
-  );
+  const rows = await callSp('sp_obtener_participacion', [usuarioId, claseId]);
   return rows[0] || null;
 }
 
 async function getEntregaClaseId(entregaId) {
-  const [rows] = await pool.execute(
-    `SELECT e.entrega_id, a.participacion_id, t.clase_id
-     FROM entrega e
-     JOIN asignacion a ON e.asignacion_id = a.asignacion_id
-     JOIN trabajos t ON a.tp_id = t.tp_id
-     WHERE e.entrega_id = ?`,
-    [entregaId]
-  );
+  const rows = await callSp('sp_obtener_entrega_clase', [entregaId]);
   return rows[0] || null;
 }
 
@@ -63,39 +50,27 @@ router.post('/entregas/:entregaId/comentarios', requireAuth, async (req, res) =>
       return res.status(403).json({ error: 'Solo el profesor o creador pueden comentar en esta entrega' });
     }
 
-    const conn = await pool.getConnection();
-    try {
-      await conn.beginTransaction();
+    const posX = posicion ? posicion.x : null;
+    const posY = posicion ? posicion.y : null;
+    const posZ = posicion ? posicion.z : null;
 
-      const ahora = new Date();
-      const [comResult] = await conn.execute(
-        'INSERT INTO comentario_priv (entrega_id, participacion_id, comentario, fecha) VALUES (?, ?, ?, ?)',
-        [req.params.entregaId, participacion.participacion_id, textoSaneado, ahora]
-      );
+    const result = await callSp('sp_crear_comentario_privado', [
+      req.params.entregaId,
+      participacion.participacion_id,
+      textoSaneado,
+      posX,
+      posY,
+      posZ
+    ]);
 
-      if (posicion) {
-        await conn.execute(
-          'INSERT INTO posiciones (com_priv_id, teje_id, valor) VALUES (?, 1, ?), (?, 2, ?), (?, 3, ?)',
-          [comResult.insertId, posicion.x, comResult.insertId, posicion.y, comResult.insertId, posicion.z]
-        );
-      }
+    const nuevoCom = result[0];
 
-      await conn.commit();
-
-      const respuesta = {
-        com_priv_id: comResult.insertId,
-        comentario: textoSaneado,
-        fecha: ahora,
-        posicion: posicion ? { x: posicion.x, y: posicion.y, z: posicion.z } : null
-      };
-
-      res.status(201).json(respuesta);
-    } catch (err) {
-      await conn.rollback();
-      throw err;
-    } finally {
-      conn.release();
-    }
+    res.status(201).json({
+      com_priv_id: nuevoCom.com_priv_id,
+      comentario: textoSaneado,
+      fecha: nuevoCom.fecha,
+      posicion: posicion ? { x: posicion.x, y: posicion.y, z: posicion.z } : null
+    });
   } catch (err) {
     console.error('Error al crear comentario:', err);
     res.status(500).json({ error: 'Error interno del servidor' });
@@ -120,25 +95,7 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
       return res.status(403).json({ error: 'No tenés acceso a esta entrega' });
     }
 
-    const [comentarios] = await pool.execute(
-      `SELECT c.com_priv_id, c.comentario, c.fecha,
-              p.posicion_x, p.posicion_y, p.posicion_z,
-              u.nombre AS profe_nombre, u.apellido AS profe_apellido
-       FROM comentario_priv c
-       LEFT JOIN (
-         SELECT com_priv_id,
-           MAX(CASE WHEN teje_id = 1 THEN valor END) AS posicion_x,
-           MAX(CASE WHEN teje_id = 2 THEN valor END) AS posicion_y,
-           MAX(CASE WHEN teje_id = 3 THEN valor END) AS posicion_z
-         FROM posiciones
-         GROUP BY com_priv_id
-       ) p ON c.com_priv_id = p.com_priv_id
-       JOIN participaciones pp ON c.participacion_id = pp.participacion_id
-       JOIN usuarios u ON pp.usuario_id = u.usuario_id
-       WHERE c.entrega_id = ?
-       ORDER BY c.fecha ASC`,
-      [req.params.entregaId]
-    );
+    const comentarios = await callSp('sp_listar_comentarios_privados', [req.params.entregaId]);
 
     const result = comentarios.map(c => ({
       com_priv_id: c.com_priv_id,
@@ -162,16 +119,7 @@ router.get('/entregas/:entregaId/comentarios', requireAuth, async (req, res) => 
 // ── DELETE /api/comentarios/:id — eliminar comentario (solo Profesor autor)
 router.delete('/comentarios/:id', requireAuth, async (req, res) => {
   try {
-    const [comentarios] = await pool.execute(
-      `SELECT c.com_priv_id, c.participacion_id, e.entrega_id,
-              a.participacion_id AS alumno_participacion_id, t.clase_id
-       FROM comentario_priv c
-       JOIN entrega e ON c.entrega_id = e.entrega_id
-       JOIN asignacion a ON e.asignacion_id = a.asignacion_id
-       JOIN trabajos t ON a.tp_id = t.tp_id
-       WHERE c.com_priv_id = ?`,
-      [req.params.id]
-    );
+    const comentarios = await callSp('sp_obtener_comentario_privado', [req.params.id]);
 
     if (comentarios.length === 0) {
       return res.status(404).json({ error: 'Comentario no encontrado' });
@@ -184,8 +132,7 @@ router.delete('/comentarios/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Solo el profesor o creador pueden eliminar comentarios' });
     }
 
-    // Las posiciones se borran por CASCADE
-    await pool.execute('DELETE FROM comentario_priv WHERE com_priv_id = ?', [req.params.id]);
+    await callSp('sp_eliminar_comentario_privado', [req.params.id]);
 
     res.json({ mensaje: 'Comentario eliminado' });
   } catch (err) {
@@ -205,36 +152,23 @@ router.patch('/entregas/:id/estado', requireAuth, async (req, res) => {
   }
 
   try {
-    const [entregas] = await pool.execute(
-      `SELECT e.entrega_id, e.asignacion_id, t.clase_id
-       FROM entrega e
-       JOIN asignacion a ON e.asignacion_id = a.asignacion_id
-       JOIN trabajos t ON a.tp_id = t.tp_id
-       WHERE e.entrega_id = ?`,
-      [req.params.id]
-    );
+    const entregas = await callSp('sp_obtener_entrega_clase', [req.params.id]);
 
     if (entregas.length === 0) {
       return res.status(404).json({ error: 'Entrega no encontrada' });
     }
 
     const participacion = await getParticipacion(req.user.id, entregas[0].clase_id);
-    if (!participacion || participacion.rol !== 'Profesor') {
+    if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
       return res.status(403).json({ error: 'Solo el profesor puede cambiar el estado de una entrega' });
     }
 
     try {
-      await pool.execute(
-        'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
-        [estado, entregas[0].asignacion_id]
-      );
+      await callSp('sp_actualizar_estado_entrega', [req.params.id, estado]);
     } catch (dbErr) {
       if (dbErr.code === 'WARN_DATA_TRUNCATED' && estado === 'Desaprobado') {
         console.warn('[comentarios.routes] La columna "estado" en la base de datos no admite "Desaprobado". Se guardó temporalmente como "Revisado". Aplique backend/database/migracion-estado-desaprobado.sql.');
-        await pool.execute(
-          'UPDATE asignacion SET estado = ? WHERE asignacion_id = ?',
-          ['Revisado', entregas[0].asignacion_id]
-        );
+        await callSp('sp_actualizar_estado_entrega', [req.params.id, 'Revisado']);
       } else {
         throw dbErr;
       }
