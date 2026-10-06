@@ -7,7 +7,7 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   port: parseInt(process.env.DB_PORT, 10),
   connectionLimit: 10,
-  charset: 'utf8mb4_general_ci',
+  charset: 'utf8mb4',
 });
 
 pool.getConnection()
