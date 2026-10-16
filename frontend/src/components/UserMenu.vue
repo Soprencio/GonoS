@@ -225,11 +225,11 @@ onUnmounted(() => {
 .user-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 8px 3px 4px;
+  gap: 8px;
+  padding: 4px 10px 4px 5px;
   background: var(--color-bg-subtle);
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: 24px;
   cursor: pointer;
   transition: all var(--transition-fast);
   outline: none;
@@ -248,23 +248,23 @@ onUnmounted(() => {
 }
 
 .avatar-img {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
   display: block;
 }
 
 .avatar-circle {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--color-accent);
   color: var(--color-white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }

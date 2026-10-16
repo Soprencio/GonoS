@@ -14,6 +14,8 @@ import AnnotationPanel from '../components/viewer/AnnotationPanel.vue'
 import ThemeToggle from '../components/ThemeToggle.vue'
 import AccentToggle from '../components/AccentToggle.vue'
 import UserMenu from '../components/UserMenu.vue'
+import BackgroundToggle from '../components/BackgroundToggle.vue'
+import GonosBrand from '../components/GonosBrand.vue'
 import StatusPill from '../components/StatusPill.vue'
 import { formatDate, getLateInfo } from '../utils/dateUtils.js'
 
@@ -22,6 +24,17 @@ const router = useRouter()
 const api = useApi()
 const toast = useToast()
 const { state: devState } = useDevTools()
+
+// ── Modos de trabajo en el visualizador ──
+// 'inspeccion' | 'comentarios' | 'calificacion'
+const reviewMode = ref('inspeccion')
+
+function setReviewMode(mode) {
+  reviewMode.value = mode
+  if (mode !== 'comentarios') {
+    annotating.value = false
+  }
+}
 
 const entrega = ref(null)
 const loading = ref(true)
@@ -153,12 +166,29 @@ async function calificar() {
   }
   savingNota.value = true
   try {
-    await api.patch(`/entregas/${route.params.id}/nota`, { nota })
-    toast.success('Nota guardada correctamente')
-    router.go(-1)
+    const res = await api.patch(`/entregas/${route.params.id}/nota`, { nota })
+    if (entrega.value) {
+      entrega.value.nota = res.data.nota
+      entrega.value.estado = res.data.estado
+    }
+    toast.success('Calificación confirmada exitosamente')
   } catch (err) {
     toast.error(err.response?.data?.error || 'Error al guardar la nota')
+  } finally {
     savingNota.value = false
+  }
+}
+
+async function downloadOriginal() {
+  try {
+    const res = await api.get(`/entregas/${route.params.id}/descargar`, { responseType: 'blob' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(res.data)
+    a.download = entrega.value?.nombre_original || 'entrega'
+    a.click()
+    URL.revokeObjectURL(a.href)
+  } catch {
+    toast.error('Error al descargar el archivo original')
   }
 }
 
@@ -344,7 +374,9 @@ onUnmounted(() => {
     <template v-else-if="entrega">
       <header class="header">
         <div class="header-left">
-          <button class="secondary" @click="router.go(-1)">← Volver</button>
+          <GonosBrand size="sm" />
+          <div class="topbar-divider"></div>
+          <button class="secondary back-btn" @click="router.go(-1)">← Volver</button>
           <div class="header-info">
             <h1 class="title">Revisar entrega</h1>
             <p class="subtitle">
@@ -362,44 +394,51 @@ onUnmounted(() => {
             </p>
           </div>
         </div>
-        <div class="header-right">
-          <div v-if="puedeCalificar" class="nota-section">
-            <label class="nota-label">Nota</label>
-            <input
-              v-model="notaInput"
-              type="number"
-              min="0"
-              max="10"
-              step="0.5"
-              class="nota-input"
-              placeholder="0-10"
-            />
-            <span class="nota-minima-hint">mín. {{ notaMinima }}</span>
-            <button class="primary small" :disabled="savingNota" @click="saveNota">
-              {{ savingNota ? 'Guardando...' : 'Confirmar nota' }}
-            </button>
-            <button class="primary small" :disabled="savingNota" @click="calificar">
-              {{ savingNota ? 'Guardando...' : 'Calificar' }}
-            </button>
-          </div>
-          <div v-else class="nota-display">
-            <StatusPill :status="entrega.estado" />
-            <span v-if="entrega.nota != null && entrega.nota > 0" class="nota-value">
-              Nota: {{ entrega.nota }}
-              <span :class="entrega.nota >= notaMinima ? 'aprobado' : 'desaprobado'">
-                ({{ entrega.nota >= notaMinima ? 'Aprobado' : 'Desaprobado' }})
-              </span>
-            </span>
-          </div>
+
+        <!-- SELECTOR CENTRAL DE LOS 3 MODOS -->
+        <nav class="mode-selector" aria-label="Modos de revisión">
           <button
-            v-if="isProfesor && (is3DFormat || isSVG)"
-            class="secondary"
-            :class="{ active: annotating }"
-            @click="toggleAnnotating"
+            type="button"
+            class="mode-btn"
+            :class="{ active: reviewMode === 'inspeccion' }"
+            @click="setReviewMode('inspeccion')"
+            title="Modo de inspección: manipular modelo 3D, cámaras, árbol de piezas y propiedades"
           >
-            {{ annotating ? 'Cancelar anotación' : 'Agregar anotación' }}
+            <span class="mode-icon">🧊</span>
+            <span>Manipular</span>
           </button>
-          <span v-if="isProfesor && annotating" class="hint-btn">Hacé clic en el modelo para colocar un pin</span>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: reviewMode === 'comentarios' }"
+            @click="setReviewMode('comentarios')"
+            title="Modo de anotaciones: colocar pines en el modelo y responder comentarios"
+          >
+            <span class="mode-icon">💬</span>
+            <span>Anotaciones</span>
+            <span v-if="comentarios.length > 0" class="mode-counter font-mono">{{ comentarios.length }}</span>
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ active: reviewMode === 'calificacion' }"
+            @click="setReviewMode('calificacion')"
+            title="Modo de evaluación: calificación de la entrega y devolución"
+          >
+            <span class="mode-icon">🎓</span>
+            <span>Calificación</span>
+            <span
+              v-if="entrega.nota != null && entrega.nota > 0"
+              class="mode-grade-tag font-mono"
+              :class="entrega.nota >= notaMinima ? 'pass' : 'fail'"
+            >
+              {{ entrega.nota }}
+            </span>
+          </button>
+        </nav>
+
+        <div class="header-right">
+          <BackgroundToggle />
           <ThemeToggle />
           <AccentToggle />
           <div class="topbar-user-gap"></div>
@@ -407,13 +446,33 @@ onUnmounted(() => {
         </div>
       </header>
 
-      <main class="main-layout">
-        <aside v-if="is3DFormat" class="panel panel-left">
-          <div class="panel-header">Piezas</div>
+      <main class="main-layout" :class="[`mode-${reviewMode}`]">
+        <!-- PANEL IZQUIERDO: ÁRBOL DE PIEZAS (Visible en modo 'inspeccion') -->
+        <aside v-if="is3DFormat && reviewMode === 'inspeccion'" class="panel panel-left animate-fade-in">
+          <div class="panel-header">
+            <span>Piezas del modelo</span>
+            <span v-if="hierarchy.length > 0" class="hierarchy-badge font-mono">{{ hierarchy.length }}</span>
+          </div>
           <ElementTree :hierarchy="hierarchy" :selectedId="selectedId" @select="onSelect" />
         </aside>
 
+        <!-- PANEL CENTRAL: VISUALIZADOR 3D / SVG -->
         <section class="panel panel-center pos-relative">
+          <!-- Barra de control flotante de anotaciones en modo 'comentarios' -->
+          <div v-if="reviewMode === 'comentarios' && isProfesor && (is3DFormat || isSVG)" class="annotation-floating-bar">
+            <button
+              class="primary small pin-toggle-btn"
+              :class="{ active: annotating }"
+              @click="toggleAnnotating"
+            >
+              <span v-if="annotating">❌ Cancelar modo pin</span>
+              <span v-else>📌 Agregar anotación en 3D</span>
+            </button>
+            <span v-if="annotating" class="annotation-hint-pill">
+              Hacé clic en cualquier superficie del modelo para clavar un pin
+            </span>
+          </div>
+
           <Viewer3D
             v-if="is3DFormat && blobUrl"
             ref="viewerRef"
@@ -427,10 +486,10 @@ onUnmounted(() => {
             @annotate-point="onAnnotatePoint"
           >
             <template #fallback>
-              <button class="secondary" @click="api.get(`/entregas/${route.params.id}/descargar`, { responseType: 'blob' }).then(r => { const a = document.createElement('a'); a.href = URL.createObjectURL(r.data); a.download = entrega.nombre_original; a.click() })">Descargar original</button>
+              <button class="secondary" @click="downloadOriginal">Descargar original</button>
             </template>
             <template #overlay>
-              <div v-if="is3DReady && viewerRef" class="pins-overlay">
+              <div v-if="is3DReady && viewerRef && (reviewMode === 'comentarios' || activeCommentId)" class="pins-overlay">
                 <AnnotationPin
                   v-for="c in commentsWithPin"
                   :key="c.com_priv_id"
@@ -478,64 +537,185 @@ onUnmounted(() => {
           <div v-else class="simple-viewer empty-viewer">
             <p>Formato no disponible para previsualización.</p>
           </div>
-
         </section>
 
-        <aside class="panel panel-right">
-          <div class="panel-header">
-            <button
-              v-for="tab in rightTabOptions"
-              :key="tab.key"
-              class="tab-btn"
-              :class="{ active: rightTab === tab.key }"
-              @click="rightTab = tab.key"
-            >{{ tab.label }}</button>
-          </div>
-
-          <div v-if="is3DFormat && rightTab === 'propiedades'" class="properties-section">
-            <ElementInfo :info="null" />
-          </div>
-
-          <div class="annotations-section" :class="{ full: !(is3DFormat && rightTab === 'propiedades') }">
-            <div v-if="pendingPin" class="pending-section">
-              <div class="pending-header">Nuevo pin</div>
-              <div class="pending-card">
-                <div class="pin-coords">
-                  X: {{ pendingPin.worldPos.x.toFixed(3) }} &nbsp; Y: {{ pendingPin.worldPos.y.toFixed(3) }}
-                  <span v-if="!isSVG">&nbsp; Z: {{ pendingPin.worldPos.z.toFixed(3) }}</span>
+        <!-- PANEL DERECHO: CONTEXTUAL SEGÚN EL MODO ACTIVO -->
+        <aside class="panel panel-right animate-fade-in">
+          <!-- ── MODO 1: INSPECCIÓN / MANIPULACIÓN ── -->
+          <template v-if="reviewMode === 'inspeccion'">
+            <div class="panel-header">
+              <span>Propiedades e Inspección</span>
+            </div>
+            <div class="panel-body inspection-body">
+              <div class="file-summary-card">
+                <div class="file-summary-header">
+                  <span class="file-format-badge font-mono">{{ getExtension(entrega.nombre_original).replace('.', '').toUpperCase() || 'FILE' }}</span>
+                  <span class="file-name" :title="entrega.nombre_original">{{ entrega.nombre_original }}</span>
                 </div>
-                <textarea
-                  v-model="pendingPin.texto"
-                  class="pending-textarea"
-                  placeholder="Escribí tu comentario..."
-                  maxlength="2000"
-                  rows="3"
-                ></textarea>
-                <p v-if="pendingPin.error" class="error-msg">{{ pendingPin.error }}</p>
-                <div class="pending-actions">
-                  <button class="primary small" :disabled="!pendingPin.texto.trim() || pendingPin.saving" @click="savePendingPin()">
-                    {{ pendingPin.saving ? 'Guardando...' : 'Guardar' }}
+                <button class="secondary small download-full-btn" @click="downloadOriginal">
+                  ⬇️ Descargar archivo original
+                </button>
+              </div>
+
+              <div class="quick-tips-card">
+                <span class="card-subtitle">Controles de visualización</span>
+                <ul class="tips-list">
+                  <li><strong>Clic izquierdo + arrastrar:</strong> Orbitar/rotar modelo</li>
+                  <li><strong>Clic derecho / Shift + arrastrar:</strong> Panorámica (paneo)</li>
+                  <li><strong>Rueda del mouse:</strong> Zoom in / out</li>
+                  <li><strong>Tecla W:</strong> Alternar modo Wireframe</li>
+                  <li><strong>Tecla F:</strong> Alternar vista Flat / Perspectiva</li>
+                  <li><strong>Barra espaciadora:</strong> Resetear encuadre</li>
+                </ul>
+              </div>
+
+              <div v-if="selectedId" class="selected-piece-card">
+                <span class="card-subtitle">Pieza seleccionada</span>
+                <p class="piece-uuid font-mono">ID: {{ selectedId }}</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- ── MODO 2: ANOTACIONES Y COMENTARIOS ── -->
+          <template v-else-if="reviewMode === 'comentarios'">
+            <div class="panel-header">
+              <span>Anotaciones</span>
+              <span class="comment-count-pill font-mono">{{ comentarios.length }}</span>
+            </div>
+
+            <div class="annotations-section full">
+              <div v-if="pendingPin" class="pending-section">
+                <div class="pending-header">Nuevo pin en el modelo</div>
+                <div class="pending-card">
+                  <div class="pin-coords font-mono">
+                    X: {{ pendingPin.worldPos.x.toFixed(2) }} · Y: {{ pendingPin.worldPos.y.toFixed(2) }}
+                    <span v-if="!isSVG"> · Z: {{ pendingPin.worldPos.z.toFixed(2) }}</span>
+                  </div>
+                  <textarea
+                    v-model="pendingPin.texto"
+                    class="pending-textarea"
+                    placeholder="Escribí una observación o corrección sobre este punto..."
+                    maxlength="2000"
+                    rows="3"
+                    autofocus
+                  ></textarea>
+                  <p v-if="pendingPin.error" class="error-msg">{{ pendingPin.error }}</p>
+                  <div class="pending-actions">
+                    <button class="primary small" :disabled="!pendingPin.texto.trim() || pendingPin.saving" @click="savePendingPin()">
+                      {{ pendingPin.saving ? 'Guardando...' : 'Guardar pin' }}
+                    </button>
+                    <button class="secondary small" @click="cancelPendingPin()">Descartar</button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="isComentariosLoading" class="comentarios-skeleton" aria-hidden="true">
+                <div v-for="n in 3" :key="n" class="comentario-skeleton-card">
+                  <SkeletonBlock width="40%" height="14px" />
+                  <SkeletonBlock width="85%" height="12px" />
+                </div>
+              </div>
+              <AnnotationPanel
+                v-else
+                :comentarios="comentarios"
+                :readonly="!isProfesor"
+                :activeId="activeCommentId"
+                @ver-en-modelo="viewOnModel"
+                @eliminar="deleteComment"
+              />
+            </div>
+          </template>
+
+          <!-- ── MODO 3: EVALUACIÓN Y CALIFICACIÓN ── -->
+          <template v-else-if="reviewMode === 'calificacion'">
+            <div class="panel-header">
+              <span>Evaluación de la entrega</span>
+            </div>
+
+            <div class="panel-body evaluation-body">
+              <div class="eval-student-card">
+                <p class="eval-student-name">{{ entrega.alumno?.nombre }}</p>
+                <div class="eval-meta-row">
+                  <span class="eval-date">{{ formatDate(entrega.fecha_entrega) }}</span>
+                  <StatusPill :status="entrega.estado" />
+                </div>
+                <div v-if="lateInfo" class="eval-late-alert">
+                  ⏱️ Entregado {{ lateInfo }} después de la fecha límite
+                </div>
+              </div>
+
+              <!-- Docente calificador -->
+              <div v-if="puedeCalificar" class="grading-form-card">
+                <label class="grading-label" for="grade-input">Nota numérica (0 al 10)</label>
+                <div class="grading-input-container">
+                  <input
+                    id="grade-input"
+                    v-model="notaInput"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    class="grading-large-input font-mono"
+                    placeholder="0.0"
+                  />
+                  <span class="grading-scale font-mono">/ 10</span>
+                </div>
+
+                <!-- Veredicto dinámico según nota minima -->
+                <div v-if="notaInput !== '' && !isNaN(parseFloat(notaInput))" class="verdict-banner">
+                  <span
+                    class="verdict-tag"
+                    :class="parseFloat(notaInput) >= notaMinima ? 'pass' : 'fail'"
+                  >
+                    {{ parseFloat(notaInput) >= notaMinima ? '✓ Aprobado' : '✕ Desaprobado' }}
+                  </span>
+                  <span class="verdict-subtext font-mono">Mínimo para aprobar: {{ notaMinima }}</span>
+                </div>
+
+                <div class="grading-buttons">
+                  <button
+                    class="primary full-width"
+                    :disabled="savingNota || notaInput === ''"
+                    @click="calificar"
+                  >
+                    {{ savingNota ? 'Guardando...' : 'Confirmar calificación' }}
                   </button>
-                  <button class="secondary small" @click="cancelPendingPin()">Descartar</button>
+                  <button
+                    class="secondary full-width"
+                    :disabled="savingNota || notaInput === ''"
+                    @click="saveNota"
+                  >
+                    Guardar borrador
+                  </button>
                 </div>
               </div>
-            </div>
 
-            <div v-if="isComentariosLoading" class="comentarios-skeleton" aria-hidden="true">
-              <div v-for="n in 3" :key="n" class="comentario-skeleton-card">
-                <SkeletonBlock width="40%" height="14px" />
-                <SkeletonBlock width="85%" height="12px" />
+              <!-- Vista Alumno o Solo Lectura -->
+              <div v-else class="grading-readonly-card">
+                <span class="readonly-title">Resultado de la evaluación</span>
+                <div class="readonly-score-display font-mono">
+                  <span class="score-num">{{ entrega.nota != null && entrega.nota > 0 ? entrega.nota : '—' }}</span>
+                  <span v-if="entrega.nota != null && entrega.nota > 0" class="score-den">/ 10</span>
+                </div>
+                <div v-if="entrega.nota != null && entrega.nota > 0" class="readonly-verdict">
+                  <span
+                    class="verdict-tag"
+                    :class="entrega.nota >= notaMinima ? 'pass' : 'fail'"
+                  >
+                    {{ entrega.nota >= notaMinima ? '✓ Aprobado' : '✕ Desaprobado' }}
+                  </span>
+                </div>
+                <p v-else class="readonly-hint">
+                  Esta entrega aún no fue calificada por el docente.
+                </p>
+              </div>
+
+              <div v-if="entrega.devolucion" class="eval-devolucion-card">
+                <span class="card-subtitle">Devolución general</span>
+                <p class="devolucion-text">{{ entrega.devolucion }}</p>
               </div>
             </div>
-            <AnnotationPanel
-              v-else
-              :comentarios="comentarios"
-              :readonly="!isProfesor"
-              :activeId="activeCommentId"
-              @ver-en-modelo="viewOnModel"
-              @eliminar="deleteComment"
-            />
-          </div>
+          </template>
         </aside>
       </main>
 
@@ -567,7 +747,9 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 20px;
+  padding: 14px 28px;
+  min-height: 72px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
   flex-shrink: 0;
@@ -578,21 +760,27 @@ onUnmounted(() => {
   align-items: center;
   gap: 16px;
   min-width: 0;
-  flex: 1;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
 .topbar-user-gap {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--color-border);
-  margin: 0 4px;
+  margin: 0 6px;
 }
 
 .header-info {
@@ -601,7 +789,8 @@ onUnmounted(() => {
 
 .title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
   color: var(--color-text);
 }
 
@@ -632,73 +821,385 @@ onUnmounted(() => {
 
 .tardia { color: var(--color-danger); }
 
-.estado-badge {
-  font-size: 0.82rem;
-  padding: 4px 10px;
+/* ── Selector de Modos Central ── */
+.mode-selector {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+  user-select: none;
+}
+
+.mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mode-btn:hover {
+  color: var(--color-text);
+  background: var(--color-bg-elevated);
+}
+
+.mode-btn.active {
+  background: var(--color-bg-elevated);
+  color: var(--color-accent);
+  box-shadow: var(--shadow-card);
+}
+
+.mode-icon {
+  font-size: 1rem;
+}
+
+.mode-counter {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.mode-grade-tag {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.mode-grade-tag.pass {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.mode-grade-tag.fail {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+/* ── Barra Flotante de Anotaciones en el Visor ── */
+.annotation-floating-bar {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-bg-elevated-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  padding: 6px 14px;
+  border-radius: 30px;
+  box-shadow: var(--shadow-card-hover);
+  animation: fadeInDown 0.2s ease-out;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.pin-toggle-btn {
+  font-weight: 600;
+}
+
+.annotation-hint-pill {
+  font-size: 0.8rem;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* ── Animación Fade-in para Paneles ── */
+.animate-fade-in {
+  animation: panelFade 0.2s ease-out;
+}
+
+@keyframes panelFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Panel de Inspección ── */
+.inspection-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.file-summary-card,
+.quick-tips-card,
+.selected-piece-card,
+.eval-student-card,
+.grading-form-card,
+.grading-readonly-card,
+.eval-devolucion-card {
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  padding: 14px;
+}
+
+.file-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.file-format-badge {
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.file-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-full-btn {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  font-size: 0.82rem;
+}
+
+.card-subtitle {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.tips-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--color-text);
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.piece-uuid {
+  font-size: 0.75rem;
+  color: var(--color-accent);
+  margin: 4px 0 0;
+  word-break: break-all;
+}
+
+.hierarchy-badge {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.comment-count-pill {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 10px;
   background: var(--color-bg-subtle);
   color: var(--color-text-muted);
 }
 
-.nota-section {
+/* ── Panel de Evaluación y Calificación ── */
+.evaluation-body {
+  padding: 16px;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
 }
 
-.nota-label {
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.nota-minima-hint {
-  font-size: 0.72rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-}
-
-.nota-input {
-  width: 60px;
-  padding: 5px 8px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
+.eval-student-name {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 700;
   color: var(--color-text);
-  font-size: 0.85rem;
-  text-align: center;
 }
 
-.nota-input::-webkit-inner-spin-button {
-  opacity: 1;
-}
-
-.nota-display {
+.eval-meta-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
-.nota-value {
-  font-size: 0.82rem;
-  color: var(--color-text);
-  font-weight: 500;
+.eval-date {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
 }
 
-.aprobado {
-  color: var(--color-success, #2e7d32);
+.eval-late-alert {
+  margin-top: 8px;
+  font-size: 0.75rem;
   font-weight: 600;
-}
-
-.desaprobado {
   color: var(--color-danger);
-  font-weight: 600;
+  background: var(--color-danger-soft);
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
-.header-right .secondary.active {
-  background: var(--color-accent);
-  color: #fff;
+.grading-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.grading-input-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  transition: border-color var(--transition-fast);
+}
+
+.grading-input-container:focus-within {
   border-color: var(--color-accent);
+}
+
+.grading-large-input {
+  width: 90px;
+  font-size: 2rem;
+  font-weight: 800;
+  text-align: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  outline: none;
+}
+
+.grading-scale {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.verdict-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 14px 0;
+}
+
+.verdict-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.verdict-tag.pass {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.verdict-tag.fail {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.verdict-subtext {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.grading-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.grading-readonly-card {
+  text-align: center;
+  padding: 24px 14px;
+}
+
+.readonly-title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.readonly-score-display {
+  margin: 12px 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.score-num {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1;
+}
+
+.score-den {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.readonly-hint {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.devolucion-text {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-text);
+  white-space: pre-wrap;
 }
 
 .main-layout {

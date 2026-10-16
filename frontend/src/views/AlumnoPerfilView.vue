@@ -8,6 +8,7 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 import AccentToggle from '../components/AccentToggle.vue'
 import UserMenu from '../components/UserMenu.vue'
 import StatusPill from '../components/StatusPill.vue'
+import GonosBrand from '../components/GonosBrand.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,6 +111,8 @@ onMounted(async () => {
     <template v-else>
       <header class="header">
         <div class="header-left">
+          <GonosBrand size="sm" />
+          <div class="topbar-divider"></div>
           <button class="secondary" @click="router.back()">← Volver</button>
           <div v-if="alumno" class="header-info">
             <h1 class="title">{{ alumno.nombre }} {{ alumno.apellido }}</h1>
@@ -181,7 +184,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 16px 32px;
+  min-height: 72px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
 }
@@ -192,17 +197,24 @@ onMounted(async () => {
   gap: 16px;
 }
 
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .topbar-user-gap {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--color-border);
-  margin: 0 4px;
+  margin: 0 6px;
 }
 
 .header-info {

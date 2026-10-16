@@ -9,6 +9,7 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 import AccentToggle from '../components/AccentToggle.vue'
 import UserMenu from '../components/UserMenu.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
+import GonosBrand from '../components/GonosBrand.vue'
 import ClassCard from '../components/ClassCard.vue'
 import ClassCardSkeleton from '../components/ClassCardSkeleton.vue'
 
@@ -107,7 +108,7 @@ onMounted(fetchClases)
 <template>
   <div class="dashboard">
     <header class="header">
-      <h1 class="logo">GonoS</h1>
+      <GonosBrand size="md" />
       <div class="header-actions">
         <BackgroundToggle />
         <ThemeToggle />
@@ -199,31 +200,26 @@ onMounted(fetchClases)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  padding: 18px 32px;
+  min-height: 72px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--glass-border);
   background: var(--color-bg-elevated-glass);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
-.logo {
-  margin: 0;
-  font-size: 1.3rem;
-  color: var(--color-text);
-  font-weight: 700;
-}
-
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
 }
 
 .topbar-user-gap {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--color-border);
-  margin: 0 4px;
+  margin: 0 6px;
 }
 
 .content {

@@ -11,6 +11,7 @@ import AccentToggle from '../components/AccentToggle.vue'
 import UserMenu from '../components/UserMenu.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
 import StatusPill from '../components/StatusPill.vue'
+import GonosBrand from '../components/GonosBrand.vue'
 import { formatDate, getRelativeTime, getUrgencyStatus, getLateInfo } from '../utils/dateUtils.js'
 
 const route = useRoute()
@@ -177,6 +178,8 @@ onMounted(async () => {
     <template v-else-if="trabajo">
       <header class="header">
         <div class="header-left">
+          <GonosBrand size="sm" />
+          <div class="topbar-divider"></div>
           <button class="secondary" @click="router.push(`/clase/${trabajo.clase_id}`)">← Volver a la clase</button>
           <h1 class="title">Trabajo práctico</h1>
         </div>
@@ -357,7 +360,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 16px 32px;
+  min-height: 72px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--glass-border);
   background: var(--color-bg-elevated-glass);
   backdrop-filter: blur(var(--glass-blur));
@@ -370,17 +375,24 @@ onMounted(async () => {
   gap: 16px;
 }
 
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 4px;
+}
+
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .topbar-user-gap {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--color-border);
-  margin: 0 4px;
+  margin: 0 6px;
 }
 
 .title {

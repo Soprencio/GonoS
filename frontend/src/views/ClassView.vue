@@ -13,6 +13,7 @@ import AccentToggle from '../components/AccentToggle.vue'
 import UserMenu from '../components/UserMenu.vue'
 import BackgroundToggle from '../components/BackgroundToggle.vue'
 import CopyCodeBadge from '../components/CopyCodeBadge.vue'
+import GonosBrand from '../components/GonosBrand.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -213,6 +214,8 @@ onMounted(async () => {
     <template v-else-if="clase">
       <header class="header">
         <div class="header-left">
+          <GonosBrand size="sm" />
+          <div class="topbar-divider"></div>
           <button class="secondary" @click="router.push('/')">← Volver</button>
           <h1 class="title">{{ clase.nombre }}</h1>
           <CopyCodeBadge v-if="clase.codigo" :code="clase.codigo" size="md" />
@@ -454,7 +457,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 16px 32px;
+  min-height: 72px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--glass-border);
   background: var(--color-bg-elevated-glass);
   backdrop-filter: blur(var(--glass-blur));
@@ -464,21 +469,28 @@ onMounted(async () => {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   flex-wrap: wrap;
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .topbar-user-gap {
   width: 1px;
-  height: 20px;
+  height: 24px;
   background: var(--color-border);
-  margin: 0 4px;
+  margin: 0 6px;
 }
 
 .title {
