@@ -1,5 +1,5 @@
 -- =============================================================================
--- GonoS — Stored Procedures para MariaDB 10.6+
+-- GonoS — Stored Procedures para MariaDB 10.6+ con Transacciones ACID
 -- Rama dev
 -- =============================================================================
 -- Ejecutar con:
@@ -33,8 +33,17 @@ CREATE PROCEDURE sp_crear_usuario(
   IN p_apellido VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   INSERT INTO usuarios (mail, password_hash, nombre, apellido)
   VALUES (p_mail, p_password_hash, p_nombre, p_apellido);
+  COMMIT;
+
   SELECT LAST_INSERT_ID() AS usuario_id;
 END$$
 
@@ -80,9 +89,18 @@ CREATE PROCEDURE sp_crear_clase(
 )
 BEGIN
   DECLARE v_clase_id INT UNSIGNED;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   INSERT INTO clases (nombre, descripcion, codigo) VALUES (p_nombre, p_descripcion, p_codigo);
   SET v_clase_id = LAST_INSERT_ID();
   INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (p_usuario_id, v_clase_id, 1);
+  COMMIT;
+
   SELECT v_clase_id AS clase_id;
 END$$
 
@@ -126,7 +144,15 @@ END$$
 DROP PROCEDURE IF EXISTS sp_eliminar_participante$$
 CREATE PROCEDURE sp_eliminar_participante(IN p_participacion_id INT UNSIGNED)
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   DELETE FROM participaciones WHERE participacion_id = p_participacion_id;
+  COMMIT;
 END$$
 
 DROP PROCEDURE IF EXISTS sp_obtener_clase_detalle$$
@@ -159,10 +185,18 @@ CREATE PROCEDURE sp_unirse_clase(
 )
 BEGIN
   DECLARE v_part_id INT UNSIGNED;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES (p_usuario_id, p_clase_id, 3);
   SET v_part_id = LAST_INSERT_ID();
   INSERT INTO asignacion (tp_id, participacion_id)
   SELECT tp_id, v_part_id FROM trabajos WHERE clase_id = p_clase_id;
+  COMMIT;
 END$$
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -191,8 +225,15 @@ CREATE PROCEDURE sp_crear_comentario_privado(
 BEGIN
   DECLARE v_com_id INT UNSIGNED;
   DECLARE v_ahora DATETIME;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
   SET v_ahora = NOW();
 
+  START TRANSACTION;
   INSERT INTO comentario_priv (entrega_id, participacion_id, comentario, fecha)
   VALUES (p_entrega_id, p_participacion_id, p_comentario, v_ahora);
   SET v_com_id = LAST_INSERT_ID();
@@ -203,6 +244,7 @@ BEGIN
       (v_com_id, 2, p_pos_y),
       (v_com_id, 3, p_pos_z);
   END IF;
+  COMMIT;
 
   SELECT v_com_id AS com_priv_id, v_ahora AS fecha;
 END$$
@@ -243,7 +285,15 @@ END$$
 DROP PROCEDURE IF EXISTS sp_eliminar_comentario_privado$$
 CREATE PROCEDURE sp_eliminar_comentario_privado(IN p_com_id INT UNSIGNED)
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   DELETE FROM comentario_priv WHERE com_priv_id = p_com_id;
+  COMMIT;
 END$$
 
 DROP PROCEDURE IF EXISTS sp_actualizar_estado_entrega$$
@@ -252,10 +302,18 @@ CREATE PROCEDURE sp_actualizar_estado_entrega(
   IN p_estado VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   UPDATE asignacion a
   JOIN entrega e ON a.asignacion_id = e.asignacion_id
   SET a.estado = p_estado
   WHERE e.entrega_id = p_entrega_id;
+  COMMIT;
 END$$
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -273,7 +331,15 @@ END$$
 DROP PROCEDURE IF EXISTS sp_eliminar_archivos_extra$$
 CREATE PROCEDURE sp_eliminar_archivos_extra(IN p_entrega_id INT UNSIGNED)
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   DELETE FROM archivo_extra WHERE entrega_id = p_entrega_id;
+  COMMIT;
 END$$
 
 DROP PROCEDURE IF EXISTS sp_obtener_asignacion_para_entrega$$
@@ -306,8 +372,15 @@ CREATE PROCEDURE sp_guardar_entrega(
 BEGIN
   DECLARE v_entrega_id INT UNSIGNED;
   DECLARE v_ahora DATETIME;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
   SET v_ahora = NOW();
 
+  START TRANSACTION;
   SELECT entrega_id INTO v_entrega_id
   FROM entrega
   WHERE asignacion_id = p_asignacion_id
@@ -328,6 +401,7 @@ BEGIN
   END IF;
 
   UPDATE asignacion SET estado = 'En revisión' WHERE asignacion_id = p_asignacion_id;
+  COMMIT;
 
   SELECT v_entrega_id AS entrega_id;
 END$$
@@ -410,10 +484,18 @@ CREATE PROCEDURE sp_actualizar_nota_entrega(
   IN p_estado VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   UPDATE asignacion a
   JOIN entrega e ON a.asignacion_id = e.asignacion_id
   SET a.nota = p_nota, a.estado = p_estado
   WHERE e.entrega_id = p_entrega_id;
+  COMMIT;
 END$$
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -440,9 +522,17 @@ CREATE PROCEDURE sp_crear_publicacion_clase(
 )
 BEGIN
   DECLARE v_pub_id INT UNSIGNED;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   INSERT INTO publicaciones (clase_id, participacion_id, mensaje)
   VALUES (p_clase_id, p_participacion_id, p_mensaje);
   SET v_pub_id = LAST_INSERT_ID();
+  COMMIT;
 
   SELECT p.publicacion_id, p.mensaje, p.created_at,
          u.nombre AS profe_nombre, u.apellido AS profe_apellido
@@ -474,9 +564,18 @@ CREATE PROCEDURE sp_crear_trabajo(
 )
 BEGIN
   DECLARE v_tp_id INT UNSIGNED;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   INSERT INTO trabajos (clase_id, participacion_id, descripcion, fecha_entrega, formatos_aceptados, nota_minima)
   VALUES (p_clase_id, p_participacion_id, p_descripcion, p_fecha_entrega, p_formatos_aceptados, p_nota_minima);
   SET v_tp_id = LAST_INSERT_ID();
+  COMMIT;
+
   SELECT v_tp_id AS tp_id;
 END$$
 
@@ -511,9 +610,17 @@ CREATE PROCEDURE sp_crear_comentario_publico(
 )
 BEGIN
   DECLARE v_id INT UNSIGNED;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    RESIGNAL;
+  END;
+
+  START TRANSACTION;
   INSERT INTO comentario_publico (tp_id, participacion_id, mensaje)
   VALUES (p_tp_id, p_participacion_id, p_mensaje);
   SET v_id = LAST_INSERT_ID();
+  COMMIT;
 
   SELECT c.comentario_publico_id, c.mensaje, c.created_at,
          u.nombre, u.apellido, r.nombre AS rol
