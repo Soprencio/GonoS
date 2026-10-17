@@ -9,6 +9,14 @@ function getInitialTheme() {
   return 'light'
 }
 
+function getInitialAccent() {
+  try {
+    const stored = localStorage.getItem('gonos-accent')
+    if (stored === 'blue' || stored === 'orange') return stored
+  } catch {}
+  return 'blue'
+}
+
 function applyTheme(theme) {
   if (theme === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark')
@@ -17,16 +25,42 @@ function applyTheme(theme) {
   }
 }
 
-const current = getInitialTheme()
-applyTheme(current)
+function applyAccent(accent) {
+  if (accent === 'orange') {
+    document.documentElement.setAttribute('data-accent', 'orange')
+  } else {
+    document.documentElement.setAttribute('data-accent', 'blue')
+  }
+}
+
+const initialTheme = getInitialTheme()
+const initialAccent = getInitialAccent()
+applyTheme(initialTheme)
+applyAccent(initialAccent)
 
 export const themeState = reactive({
-  current,
+  current: initialTheme,
+  accent: initialAccent,
   toggle() {
     this.current = this.current === 'light' ? 'dark' : 'light'
     applyTheme(this.current)
     try {
       localStorage.setItem('gonos-theme', this.current)
+    } catch {}
+  },
+  toggleAccent() {
+    this.accent = this.accent === 'blue' ? 'orange' : 'blue'
+    applyAccent(this.accent)
+    try {
+      localStorage.setItem('gonos-accent', this.accent)
+    } catch {}
+  },
+  setAccent(val) {
+    if (val !== 'blue' && val !== 'orange') return
+    this.accent = val
+    applyAccent(this.accent)
+    try {
+      localStorage.setItem('gonos-accent', this.accent)
     } catch {}
   }
 })

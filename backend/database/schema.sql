@@ -81,6 +81,7 @@ CREATE TABLE trabajos (
   descripcion        TEXT NOT NULL,
   fecha_entrega      DATETIME NOT NULL,
   formatos_aceptados JSON NOT NULL,
+  nota_minima        DECIMAL(5,2) NOT NULL DEFAULT 6.00,
   created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (tp_id),
@@ -93,7 +94,7 @@ CREATE TABLE asignacion (
   tp_id            INT UNSIGNED NOT NULL,
   participacion_id INT UNSIGNED NOT NULL,
   nota             DECIMAL(5,2) NULL,
-  estado           ENUM('Pendiente','En revisión','Revisado','Aprobado') NOT NULL DEFAULT 'Pendiente',
+  estado           ENUM('Pendiente','En revisión','Desaprobado','Aprobado') NOT NULL DEFAULT 'Pendiente',
   created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (asignacion_id),
@@ -144,6 +145,28 @@ CREATE TABLE posiciones (
   PRIMARY KEY (com_priv_id, teje_id),
   CONSTRAINT fk_pos_coment FOREIGN KEY (com_priv_id) REFERENCES comentario_priv(com_priv_id) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT fk_pos_teje   FOREIGN KEY (teje_id)     REFERENCES tipos_ejes(teje_id)          ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE comentario_publico (
+  comentario_publico_id INT UNSIGNED AUTO_INCREMENT,
+  tp_id                 INT UNSIGNED NOT NULL,
+  participacion_id      INT UNSIGNED NOT NULL,
+  mensaje               TEXT NOT NULL,
+  created_at            DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (comentario_publico_id),
+  CONSTRAINT fk_cpub_tp             FOREIGN KEY (tp_id)            REFERENCES trabajos(tp_id)           ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_cpub_participacion  FOREIGN KEY (participacion_id) REFERENCES participaciones(participacion_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE publicaciones (
+  publicacion_id   INT UNSIGNED AUTO_INCREMENT,
+  clase_id         INT UNSIGNED NOT NULL,
+  participacion_id INT UNSIGNED NOT NULL,
+  mensaje          TEXT NOT NULL,
+  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (publicacion_id),
+  CONSTRAINT fk_pub_clase          FOREIGN KEY (clase_id)         REFERENCES clases(clase_id)             ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_pub_participacion  FOREIGN KEY (participacion_id) REFERENCES participaciones(participacion_id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- =============================================================================

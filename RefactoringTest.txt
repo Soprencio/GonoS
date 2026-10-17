@@ -1,0 +1,343 @@
+================================================================================
+TRABAJO PRÁCTICO: REFACTORING Y PRUEBAS UNITARIAS
+Proyecto GonoS — Plataforma de entrega y revisión de trabajos 3D
+================================================================================
+
+--------------------------------------------------------------------------------
+1. INTRODUCCIÓN: QUÉ ES GONOS Y DE QUÉ TRATA ESTE TRABAJO
+--------------------------------------------------------------------------------
+GonoS es una plataforma web pensada para que los alumnos suban trabajos
+prácticos (modelos 3D y archivos vectoriales como .obj, .stl o .svg) y los
+docentes los revisen directamente en el navegador, sin tener que descargar
+ningún archivo ni instalar programas. Cuando un alumno entrega su trabajo, la
+plataforma lo deja en estado "En revisión"; cuando el docente lo corrige con
+una nota, el trabajo pasa a quedar aprobado o desaprobado.
+
+El problema que motivó este trabajo apareció justamente ahí, en el momento de
+corregir. Por un lado, el backend registraba el resultado de la corrección con
+un estado llamado "Revisado" cuando la nota quedaba por debajo del mínimo
+necesario para aprobar. Por el otro, la interfaz mostraba ese mismo caso como
+"Desaprobado". O sea: el sistema guardaba una cosa y mostrada otra, y esa
+diferencia de nombres confundía y obligaba a mantener dos criterios distintos
+para describir el mismo resultado.
+
+Además, la lógica encargada de validar la nota, de interpretar la nota mínima
+de aprobación y de decidir el estado final estaba escrita directamente dentro
+de la ruta de la API, mezclada con las consultas a la base de datos y con los
+controles de permisos. Eso hacía que el código fuera difícil de leer, que
+cualquier cambio en la forma de calificar hubiera que hacerlo en un archivo de
+más de 430 líneas, y que no existiera ninguna manera de probar por separado si
+esa lógica funcionaba bien.
+
+La solución propuesta fue bastante directa: sacar toda esa lógica de
+calificación del medio de la ruta, llevarla a un módulo aparte con funciones
+puras y simples, probarla con una batería de pruebas unitarias, y de paso
+unificar el vocabulario de estados para que backend y frontend digan lo mismo.
+Eso es lo que se documenta a continuación.
+
+
+--------------------------------------------------------------------------------
+2. CÓMO SE VEÍA EL CÓDIGO ANTES
+--------------------------------------------------------------------------------
+La ruta PATCH /api/entregas/:id/nota es la que se encarga de guardar la nota
+que pone el docente. Antes del cambio, la validación del dato recibido y el
+cálculo del estado final estaban escritos a mano dentro del propio endpoint:
+
+  router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
+    const { nota } = req.body;
+
+    if (nota === undefined || nota === null || isNaN(nota)) {
+      return res.status(400).json({ error: 'La nota es obligatoria y debe ser un número' });
+    }
+
+    const notaNum = parseFloat(nota);
+    if (notaNum < 0 || notaNum > 10) {
+      return res.status(400).json({ error: 'La nota debe estar entre 0 y 10' });
+    }
+
+    try {
+      const [entregas] = await pool.execute(
+        `SELECT e.entrega_id, e.asignacion_id, t.clase_id, t.tp_id, t.nota_minima
+         FROM entrega e
+         JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+         JOIN trabajos t ON a.tp_id = t.tp_id
+         WHERE e.entrega_id = ?`,
+        [req.params.id]
+      );
+
+      if (entregas.length === 0) {
+        return res.status(404).json({ error: 'Entrega no encontrada' });
+      }
+
+      const participacion = await getParticipacion(req.user.id, entregas[0].clase_id);
+      if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+        return res.status(403).json({ error: 'Solo el profesor puede calificar' });
+      }
+
+      const [tps] = await pool.execute(
+        'SELECT participacion_id FROM trabajos WHERE tp_id = ?',
+        [entregas[0].tp_id]
+      );
+      if (tps.length > 0 && participacion.rol !== 'Creador' && tps[0].participacion_id !== participacion.participacion_id) {
+        return res.status(403).json({ error: 'No podés calificar un trabajo que no creaste' });
+      }
+
+      const notaMinima = entregas[0].nota_minima === null || entregas[0].nota_minima === undefined
+        ? 6
+        : parseFloat(entregas[0].nota_minima);
+      const estadoFinal = notaNum >= notaMinima ? 'Aprobado' : 'Revisado';
+
+      await pool.execute(
+        'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+        [notaNum, estadoFinal, entregas[0].asignacion_id]
+      );
+
+      res.json({ mensaje: 'Nota guardada', nota: notaNum, nota_minima: notaMinima, estado: estadoFinal });
+    } catch (err) {
+      console.error('Error al guardar nota:', err);
+      res.status(500).json({ error: 'Error interno del servidor' });
+    }
+  });
+
+Se puede ver que en el medio de la ruta conviven tres responsabilidades: la
+validación de entrada, el cálculo del estado y la interacción con la base de
+datos. Todo junto, sin forma de testearlo de manera aislada.
+
+
+--------------------------------------------------------------------------------
+3. CÓMO QUEDÓ EL CÓDIGO DESPUÉS
+--------------------------------------------------------------------------------
+La lógica pura de calificación se movió a un módulo nuevo llamado notas.js,
+dentro de la carpeta utils del backend. Quedó así:
+
+  const NOTA_MINIMA_DEFAULT = 6;
+
+  function normalizarNotaMinima(notaMinima) {
+    const n = parseFloat(notaMinima);
+    return Number.isFinite(n) ? n : NOTA_MINIMA_DEFAULT;
+  }
+
+  function validarNota(nota) {
+    if (nota === undefined || nota === null) {
+      return { ok: false, error: 'La nota es obligatoria y debe ser un número' };
+    }
+    const valor = parseFloat(nota);
+    if (isNaN(valor)) {
+      return { ok: false, error: 'La nota es obligatoria y debe ser un número' };
+    }
+    if (valor < 0 || valor > 10) {
+      return { ok: false, error: 'La nota debe estar entre 0 y 10' };
+    }
+    return { ok: true, valor };
+  }
+
+  function calcularEstadoFinal(nota, notaMinima) {
+    const umbral = normalizarNotaMinima(notaMinima);
+    return nota >= umbral ? 'Aprobado' : 'Desaprobado';
+  }
+
+  module.exports = { NOTA_MINIMA_DEFAULT, normalizarNotaMinima, validarNota, calcularEstadoFinal };
+
+Y la ruta quedó mucho más limpia, dedicándose a coordinar permisos, datos y
+persistencia, y dejándole el trabajo de calcular a esas funciones:
+
+  router.patch('/entregas/:id/nota', requireAuth, async (req, res) => {
+    const { nota } = req.body;
+
+    const validacion = validarNota(nota);
+    if (!validacion.ok) {
+      return res.status(400).json({ error: validacion.error });
+    }
+
+    const notaNum = validacion.valor;
+
+    try {
+      const [entregas] = await pool.execute(
+        `SELECT e.entrega_id, e.asignacion_id, t.clase_id, t.tp_id, t.nota_minima
+         FROM entrega e
+         JOIN asignacion a ON e.asignacion_id = a.asignacion_id
+         JOIN trabajos t ON a.tp_id = t.tp_id
+         WHERE e.entrega_id = ?`,
+        [req.params.id]
+      );
+
+      if (entregas.length === 0) {
+        return res.status(404).json({ error: 'Entrega no encontrada' });
+      }
+
+      const participacion = await getParticipacion(req.user.id, entregas[0].clase_id);
+      if (!participacion || (participacion.rol !== 'Profesor' && participacion.rol !== 'Creador')) {
+        return res.status(403).json({ error: 'Solo el profesor puede calificar' });
+      }
+
+      const [tps] = await pool.execute(
+        'SELECT participacion_id FROM trabajos WHERE tp_id = ?',
+        [entregas[0].tp_id]
+      );
+      if (tps.length > 0 && participacion.rol !== 'Creador' && tps[0].participacion_id !== participacion.participacion_id) {
+        return res.status(403).json({ error: 'No podés calificar un trabajo que no creaste' });
+      }
+
+      const notaMinima = normalizarNotaMinima(entregas[0].nota_minima);
+      const estadoFinal = calcularEstadoFinal(notaNum, notaMinima);
+
+      await pool.execute(
+        'UPDATE asignacion SET nota = ?, estado = ? WHERE asignacion_id = ?',
+        [notaNum, estadoFinal, entregas[0].asignacion_id]
+      );
+
+      res.json({ mensaje: 'Nota guardada', nota: notaNum, nota_minima: notaMinima, estado: estadoFinal });
+    } catch (err) {
+      console.error('Error al guardar nota:', err);
+      res.status(500).json({ error: 'Error interno del servidor' });
+    }
+  });
+
+
+--------------------------------------------------------------------------------
+4. QUÉ CAMBIÓ Y POR QUÉ
+--------------------------------------------------------------------------------
+En esencia, la mejora fue de organización: separar la lógica de negocio del
+resto del flujo de la ruta. validarNota() se encarga ahora de decidir si el
+dato que llega del docente es una nota aceptable; normalizarNotaMinima() se
+encarga de interpretar la nota mínima del trabajo, asumiendo 6 cuando el
+trabajo no tiene definida ninguna; y calcularEstadoFinal() combina ambas cosas
+para decir si la entrega aprueba o no.
+
+El comportamiento de la API no cambió: sigue rechazando notas que no sean
+números o que estén fuera del rango 0 a 10, sigue usando 6 como nota mínima
+por defecto, y sigue guardando la nota con su estado correspondiente.
+
+Lo único que se modificó a propósito fue la nomenclatura. Donde antes el
+backend escribía "Revisado", ahora escribe "Desaprobado". El flujo completo
+quedó así: Pendiente -> En revisión (cuando el alumno entrega) -> Aprobado o
+Desaprobado (cuando el docente corrige). Para que todo el sistema hable el
+mismo idioma se ajustaron también el listado de estados válidos, los
+contadores que muestra el panel del docente y el ENUM de la base de datos, con
+una migración SQL lista para aplicar sobre bases existentes.
+
+
+--------------------------------------------------------------------------------
+5. LAS PRUEBAS UNITARIAS Y CÓMO SE CORRIERON
+--------------------------------------------------------------------------------
+Para comprobar que la lógica extraída funcionaba como se esperaba, se escribió
+una batería de pruebas usando el módulo de testeo nativo de Node.js, o sea sin
+agregar ninguna dependencia al proyecto. Cada prueba invoca directamente a las
+funciones de notas.js y compara lo que devuelven con el resultado que debería
+ser.
+
+La secuencia de pruebas fue la siguiente.
+
+Se empieza por lo más simple: validar que la validación de la nota no rechace
+un valor razonable. Se le pasa "7" a validarNota() y se espera que la función
+responda con ok en true y el valor numérico 7. Después se repite la prueba con
+los extremos permitidos: 0 y 10, que también tienen que ser aceptados, porque
+una nota en cero es válida aunque sea desaprobatoria.
+
+Luego se prueba el lado contrario, que es donde la validación tiene que
+ponerse estricta. Se le manda "abc", que no es un número, y también valores
+vacíos (undefined, null y un string vacío); en todos esos casos la función
+tiene que responder con ok en false. Lo mismo con notas que están fuera de
+rango: -1, 11 y "-0.1", todas por debajo o por encima de la escala permitida.
+Estos son los casos que antes estaban cubiertos por los if dentro del
+endpoint, así que acá se está verificando que esa conducta se preservó.
+
+Terminada la validación, se pasa a la parte más interesante: la decisión de
+aprobar o desaprobar, que hace calcularEstadoFinal(). Se prueba primero el
+caso feliz: una nota de 8 con mínimo de 6 tiene que dar "Aprobado". Después se
+verifica el borde justo del umbral: nota 6 con mínimo 6 también aprueba,
+porque la condición es "mayor o igual" y no "mayor estricto". Y para el otro
+lado, se comprueba que 5, 5.99 y 0 con mínimo 6 dan "Desaprobado".
+
+Por último se ataca el comportamiento con datos incompletos. Si el trabajo no
+tiene nota mínima cargada, calcularEstadoFinal() tiene que comportarse como si
+el mínimo fuera 6: una nota 7 aprueba y una nota 5 desaprueba. Y en el mismo
+sentido, normalizarNotaMinima() se prueba directamente, confirmando que cuando
+recibe null, undefined o NaN devuelve el default 6, y que cuando recibe "7" o
+"7.5" los interpreta correctamente como 7 y 7.5.
+
+El detalle de qué se espera de cada una queda registrado en el propio archivo
+backend/test/notas.test.js, y se ejecuta con npm test desde la carpeta backend.
+
+
+--------------------------------------------------------------------------------
+6. RESULTADOS
+--------------------------------------------------------------------------------
+Con el comando npm test la batería corrió completa y las nueve pruebas
+pasaron sin ninguna falla:
+
+  > node --test test/notas.test.js
+
+  ✔ validarNota acepta una nota válida
+  ✔ validarNota acepta límites 0 y 10
+  ✔ validarNota rechaza valores no numéricos
+  ✔ validarNota rechaza notas fuera del rango 0-10
+  ✔ calcularEstadoFinal aprueba con nota mayor o igual al mínimo
+  ✔ calcularEstadoFinal desaprueba con nota menor al mínimo
+  ✔ calcularEstadoFinal usa 6 como nota mínima por defecto
+  ✔ normalizarNotaMinima usa NOTA_MINIMA_DEFAULT cuando el valor es inválido
+  ✔ normalizarNotaMinima parsea valores numéricos válidos
+
+  tests 9 · pass 9 · fail 0
+
+Resultado: 9 de 9 pruebas pasaron.
+
+Si se piensa la verificación como una simulación de prueba del código, se
+puede resumir caso por caso qué se esperaba, qué hacía el código antes y qué
+hace ahora:
+
+  Nota "7": se esperaba que se acepte y se guarde. Antes lo hacía mediante el
+  parseFloat y los if del endpoint; ahora lo hace validarNota(), devolviendo
+  { ok: true, valor: 7 }. El resultado final es idéntico.
+
+  Nota "abc": se esperaba un rechazo con el mensaje "La nota es obligatoria y
+  debe ser un número". Antes lo detectaba isNaN() en la misma ruta; ahora lo
+  detecta validarNota(). Misma respuesta HTTP, mismo texto.
+
+  Nota -1 o 11: se esperaba un rechazo con "La nota debe estar entre 0 y 10".
+  Antes lo controlaba el rango a mano; ahora lo controla validarNota(). Misma
+  respuesta.
+
+  Nota 6 con mínimo 6: se esperaba aprobación porque el umbral se considera
+  alcanzado. Antes daba "Aprobado" con la comparación inline; ahora da
+  "Aprobado" con calcularEstadoFinal(). Sin cambios.
+
+  Nota 5.99 con mínimo 6: se esperaba desaprobación. Antes el backend
+  guardaba "Revisado" mientras que la interfaz mostraba "Desaprobado", dos
+  palabras para el mismo resultado. Ahora ambos lados dicen "Desaprobado".
+  Este es el único cambio intencional de comportamiento.
+
+  Trabajo sin nota mínima: se esperaba usar 6 por defecto. Antes lo hacía un
+  ternario dentro de la ruta; ahora lo hace normalizarNotaMinima(). Sin
+  cambios.
+
+La lectura que queda es simple: el refactoring no alteró el comportamiento de
+la API en los casos habituales, y el único cambio visible es el nombre del
+estado, que ahora es coherente entre lo que el backend guarda y lo que el
+usuario ve en pantalla.
+
+
+--------------------------------------------------------------------------------
+7. CIERRE
+--------------------------------------------------------------------------------
+El trabajo dejó a GonoS con la lógica de calificación fuera de la ruta,
+probada por nueve pruebas unitarias que pasan, y con un vocabulario de estados
+unificado: Pendiente, En revisión, Aprobado y Desaprobado.
+
+Para las bases de datos que ya tienen registros con el estado "Revisado",
+queda pendiente aplicar una única migración a mano (el agente no ejecuta SQL):
+
+  mysql -u root -p gonos < backend/database/migracion-estado-desaprobado.sql
+
+Archivos que forman parte del trabajo:
+  backend/utils/notas.js                              (nuevo)
+  backend/test/notas.test.js                          (nuevo)
+  backend/routes/entregas.routes.js                   (refactorizado)
+  backend/routes/comentarios.routes.js                (ESTADOS_VALIDOS)
+  backend/routes/trabajos.routes.js                   (contador desaprobados)
+  backend/database/schema.sql                         (ENUM)
+  backend/database/migracion-estado-desaprobado.sql   (nuevo)
+  backend/package.json                                (script "test")
+  frontend/src/components/SubmissionRow.vue           (Revisado -> Desaprobado)
+  frontend/src/views/AlumnoPerfilView.vue             (Revisado -> Desaprobado)
+================================================================================

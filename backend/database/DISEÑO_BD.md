@@ -111,6 +111,7 @@ Una tarea/actividad dentro de una clase. La crea una participación con rol Prof
 | `descripcion` | `TEXT` | NOT NULL | Consigna del trabajo (hasta 64KB). |
 | `fecha_entrega` | `DATETIME` | NOT NULL | Fecha límite. Se valida en backend que no sea pasada al crear. |
 | `formatos_aceptados` | `JSON` | NOT NULL | Array de strings: `['.obj','.stl','.svg']`. MariaDB 10.6+ soporta JSON como tipo nativo. |
+| `nota_minima` | `DECIMAL(5,2)` | NOT NULL DEFAULT 6.00 | Nota mínima para aprobar el trabajo. La elige el profesor/creador al crear el trabajo. Determina el estado Aprobado/Desaprobado al calificar. |
 | `created_at` | `DATETIME` | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | `DATETIME` | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | |
 
@@ -135,7 +136,7 @@ Vincula un trabajo con el Alumno que debe resolverlo. Guarda la nota y el estado
 | `tp_id` | `INT UNSIGNED` | FK → `trabajos(tp_id)`, NOT NULL | |
 | `participacion_id` | `INT UNSIGNED` | FK → `participaciones(participacion_id)`, NOT NULL | El Alumno asignado. |
 | `nota` | `DECIMAL(5,2)` | NULL | Permite valores como 0.00 a 999.99. NULL = sin calificar. DECIMAL evita errores de redondeo de FLOAT. |
-| `estado` | `ENUM('Pendiente','En revisión','Revisado','Aprobado')` | NOT NULL, DEFAULT 'Pendiente' | Los 4 estados del flujo. ENUM es suficiente porque son valores fijos y no tienen atributos adicionales. |
+| `estado` | `ENUM('Pendiente','En revisión','Desaprobado','Aprobado')` | NOT NULL, DEFAULT 'Pendiente' | Los 4 estados del flujo. ENUM es suficiente porque son valores fijos y no tienen atributos adicionales. |
 | `created_at` | `DATETIME` | DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | `DATETIME` | DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | |
 
@@ -222,7 +223,7 @@ Coordenada 3D de un comentario. PK compuesta: cada comentario con posición tien
 **Opción elegida:** ENUM sobre la columna `estado` en `asignacion`.
 
 **Justificación:**
-1. Los 4 valores (`Pendiente`, `En revisión`, `Revisado`, `Aprobado`) son fijos, no tienen atributos adicionales (color, orden, etc.) que justifiquen una tabla separada.
+1. Los 4 valores (`Pendiente`, `En revisión`, `Desaprobado`, `Aprobado`) son fijos, no tienen atributos adicionales (color, orden, etc.) que justifiquen una tabla separada.
 2. La lógica de transición de estados se maneja en la capa de aplicación (código), no en la BD.
 3. ENUM es más simple de consultar y mantener: un `ALTER TABLE` si en el futuro se agrega un estado es trivial y poco frecuente.
 4. Una tabla `estados_entrega` añadiría un JOIN innecesario para cada consulta de asignación sin beneficio real.

@@ -7,6 +7,10 @@ const props = defineProps({
   readonly: {
     type: Boolean,
     default: false
+  },
+  activeId: {
+    type: Number,
+    default: null
   }
 })
 
@@ -36,9 +40,11 @@ function formatDate(iso) {
         v-for="c in comentarios"
         :key="c.com_priv_id"
         class="comment-card"
+        :class="{ active: activeId === c.com_priv_id }"
       >
         <div class="comment-text">{{ c.comentario }}</div>
         <div class="comment-meta">
+          <span class="comment-author" v-if="c.profesor">{{ c.profesor }}</span>
           <span class="comment-date">{{ formatDate(c.fecha) }}</span>
           <div class="comment-actions">
             <button
@@ -98,6 +104,12 @@ function formatDate(iso) {
   border-radius: var(--radius-sm);
   margin-bottom: 8px;
   background: var(--color-bg-elevated);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.comment-card.active {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
 }
 
 .comment-text {
@@ -114,6 +126,12 @@ function formatDate(iso) {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.comment-author {
+  font-size: 0.72rem;
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 .comment-date {

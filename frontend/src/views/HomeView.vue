@@ -1,5 +1,6 @@
 <script setup>
 import ThemeToggle from '../components/ThemeToggle.vue'
+import AccentToggle from '../components/AccentToggle.vue'
 </script>
 
 <template>
@@ -19,6 +20,7 @@ import ThemeToggle from '../components/ThemeToggle.vue'
 
     <div class="toggle-area">
       <ThemeToggle />
+      <AccentToggle />
     </div>
   </div>
 </template>
@@ -72,5 +74,9 @@ h1 {
 
 .toggle-area {
   margin-top: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 </style>

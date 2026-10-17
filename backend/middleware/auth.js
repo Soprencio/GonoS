@@ -1,5 +1,5 @@
 const { verifyToken } = require('../utils/jwt');
-const pool = require('../database/connection');
+const { callSp } = require('../database/connection');
 
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
@@ -16,7 +16,7 @@ async function requireAuth(req, res, next) {
   req.user = { id: decoded.id, mail: decoded.mail };
 
   try {
-    const [rows] = await pool.execute('SELECT activo FROM usuarios WHERE usuario_id = ?', [req.user.id]);
+    const rows = await callSp('sp_usuario_por_id', [req.user.id]);
     if (rows.length === 0 || !rows[0].activo) {
       return res.status(403).json({ error: 'Cuenta desactivada. Contactá al administrador' });
     }

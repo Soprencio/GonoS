@@ -29,11 +29,12 @@ INSERT INTO participaciones (usuario_id, clase_id, rol_id) VALUES
   (3, 1, 3);  -- Carlos es Alumno
 
 -- TRABAJO
-INSERT INTO trabajos (clase_id, participacion_id, descripcion, fecha_entrega, formatos_aceptados) VALUES
+INSERT INTO trabajos (clase_id, participacion_id, descripcion, fecha_entrega, formatos_aceptados, nota_minima) VALUES
   (1, 1,
    'Diseñar y modelar una casa patio de 60m². Entregar archivo .obj o .stl del modelo 3D más una planta en .svg.',
    DATE_ADD(NOW(), INTERVAL 14 DAY),
-   '[\".obj\", \".stl\", \".svg\"]');
+   '[\".obj\", \".stl\", \".svg\"]',
+   6.00);
 
 -- ASIGNACIONES (creadas automáticamente para cada alumno)
 INSERT INTO asignacion (tp_id, participacion_id) VALUES

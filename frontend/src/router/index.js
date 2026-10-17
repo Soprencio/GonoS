@@ -42,6 +42,12 @@ const routes = [
     path: '/entrega/:id/revisar',
     name: 'review',
     component: () => import('../views/ReviewView.vue'),
+    meta: { requiresAuth: true, hideDots: true }
+  },
+  {
+    path: '/clase/:claseId/alumno/:usuarioId',
+    name: 'alumno-perfil',
+    component: () => import('../views/AlumnoPerfilView.vue'),
     meta: { requiresAuth: true }
   },
 ]

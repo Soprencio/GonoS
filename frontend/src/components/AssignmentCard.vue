@@ -1,4 +1,9 @@
 <script setup>
+import { computed } from 'vue'
+import { useSpotlight } from '../composables/useSpotlight.js'
+import StatusPill from './StatusPill.vue'
+import { formatDate, getRelativeTime, getUrgencyStatus } from '../utils/dateUtils.js'
+
 const props = defineProps({
   trabajo: {
     type: Object,
@@ -12,24 +17,42 @@ const props = defineProps({
 
 defineEmits(['click'])
 
-function formatDate(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return new Intl.DateTimeFormat('es-AR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(d)
-}
+const { onMouseMove, onMouseLeave } = useSpotlight()
+
+const isSubmitted = computed(() => {
+  if (props.isTeacher) return false
+  const s = props.trabajo.estado?.toLowerCase() || ''
+  return s === 'aprobado' || s === 'en revisión' || s === 'desaprobado'
+})
+
+const relativeText = computed(() => {
+  return getRelativeTime(props.trabajo.fecha_entrega, isSubmitted.value)
+})
+
+const urgency = computed(() => {
+  return getUrgencyStatus(props.trabajo.fecha_entrega, isSubmitted.value)
+})
 </script>
 
 <template>
-  <div class="assignment-card" @click="$emit('click')">
+  <div
+    class="assignment-card"
+    @click="$emit('click')"
+    @mousemove="onMouseMove"
+    @mouseleave="onMouseLeave"
+  >
     <div class="card-body">
       <p class="desc">{{ trabajo.descripcion?.substring(0, 120) }}{{ trabajo.descripcion?.length > 120 ? '…' : '' }}</p>
-      <p class="due-date">Entrega: {{ formatDate(trabajo.fecha_entrega) }}</p>
+      <div class="due-row">
+        <span class="due-date">Entrega: {{ formatDate(trabajo.fecha_entrega) }}</span>
+        <span
+          v-if="relativeText"
+          class="relative-tag font-mono"
+          :class="`urgency-${urgency}`"
+        >
+          {{ relativeText }}
+        </span>
+      </div>
     </div>
     <div class="card-side">
       <template v-if="isTeacher">
@@ -41,15 +64,7 @@ function formatDate(iso) {
         </span>
       </template>
       <template v-else>
-        <span
-          class="status-badge"
-          :class="{
-            'status-pending': trabajo.estado === 'Pendiente',
-            'status-muted': trabajo.estado !== 'Pendiente'
-          }"
-        >
-          {{ trabajo.estado || 'Sin estado' }}
-        </span>
+        <StatusPill :status="trabajo.estado" />
       </template>
     </div>
   </div>
@@ -57,20 +72,55 @@ function formatDate(iso) {
 
 <style scoped>
 .assignment-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
   padding: 16px 20px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: box-shadow var(--transition-fast);
-  background: var(--color-bg-elevated);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  background: var(--color-bg-subtle-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  animation: card-in 0.45s ease both;
+  box-shadow: var(--shadow-card);
+}
+
+.assignment-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    360px circle at var(--mouse-x, -999px) var(--mouse-y, -999px),
+    var(--color-spotlight),
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .assignment-card:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-accent);
+  background: var(--color-bg-elevated-glass);
+}
+
+.assignment-card:hover::before {
+  opacity: 1;
+}
+
+.card-body,
+.card-side {
+  position: relative;
+  z-index: 2;
 }
 
 .card-body {
@@ -83,12 +133,61 @@ function formatDate(iso) {
   font-size: 0.9rem;
   color: var(--color-text);
   line-height: 1.4;
+  font-weight: 500;
+}
+
+.due-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
 }
 
 .due-date {
   margin: 0;
   font-size: 0.8rem;
   color: var(--color-text-muted);
+}
+
+.relative-tag {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.urgency-urgent {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning-soft);
+  animation: urgent-pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes urgent-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(0.97); }
+}
+
+.urgency-warning {
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.urgency-expired {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.urgency-submitted {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.urgency-normal {
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
 }
 
 .card-side {
@@ -108,20 +207,4 @@ function formatDate(iso) {
   color: var(--color-success);
 }
 
-.status-badge {
-  font-size: 0.75rem;
-  padding: 3px 10px;
-  border-radius: 10px;
-  font-weight: 500;
-}
-
-.status-pending {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-}
-
-.status-muted {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-disabled);
-}
 </style>
